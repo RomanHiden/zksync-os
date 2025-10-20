@@ -60,12 +60,12 @@ impl U32Memory for DummyMemorySource {
 pub struct ZkEENonDeterminismSource<M: U32Memory> {
     query_buffer: Option<QueryBuffer>,
     current_query_id: Option<u32>,
-    current_iterator: Option<Box<dyn ExactSizeIterator<Item = usize> + 'static>>,
+    current_iterator: Option<Box<dyn ExactSizeIterator<Item = usize> + 'static + Send + Sync>>,
     iterator_len_to_indicate: Option<u32>,
     high_half: Option<u32>,
     is_connected_to_external_oracle: bool,
     /// Vector of different processors that are responsible for handling queries.
-    processors: Vec<Box<dyn OracleQueryProcessor<M> + 'static>>,
+    processors: Vec<Box<dyn OracleQueryProcessor<M> + 'static + Send + Sync>>,
     /// Mapping from query_id to processor that is handling it (represented as index in processors vector above).
     ranges: BTreeMap<u32, usize>,
 }
@@ -87,7 +87,7 @@ impl<M: U32Memory> Default for ZkEENonDeterminismSource<M> {
 
 impl<M: U32Memory> ZkEENonDeterminismSource<M> {
     #[track_caller]
-    pub fn add_external_processor<P: OracleQueryProcessor<M> + 'static>(&mut self, processor: P) {
+    pub fn add_external_processor<P: OracleQueryProcessor<M> + 'static + Send + Sync>(&mut self, processor: P) {
         let query_ids = processor.supported_query_ids();
         let processor_id = self.processors.len();
         for id in query_ids.into_iter() {
@@ -256,7 +256,7 @@ pub trait OracleQueryProcessor<M: U32Memory> {
         query_id: u32,
         query: Vec<usize>,
         memory: &M,
-    ) -> Box<dyn ExactSizeIterator<Item = usize> + 'static>;
+    ) -> Box<dyn ExactSizeIterator<Item = usize> + 'static + Send + Sync>;
 }
 
 struct QueryBuffer {

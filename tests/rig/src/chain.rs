@@ -487,6 +487,8 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         headers.reverse();
         assert_eq!(headers.len(), witness.headers.len());
 
+        let block_number = headers[0].number;
+
         let mut headers_encodings: Vec<_> =
             witness.headers.iter().map(|el| el.0.to_vec()).collect();
         headers_encodings.reverse();
@@ -577,8 +579,6 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         use basic_bootloader::bootloader::config::BasicBootloaderForwardETHLikeConfig;
         use forward_system::run::result_keeper::ForwardRunningResultKeeper;
 
-        let mut result_keeper = ForwardRunningResultKeeper::new(NoopTxCallback);
-        let mut nop_tracer = NopTracer::default();
         use oracle_provider::DummyMemorySource;
 
         let mut oracle = ZkEENonDeterminismSource::default();
@@ -592,16 +592,31 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         oracle.add_external_processor(callable_oracles::arithmetic::ArithmeticQuery::default());
         oracle.add_external_processor(callable_oracles::field_hints::FieldOpsQuery::default());
         
-        if PROOF_ENV {
-            BasicBootloader::<
-                EthereumStorageSystemTypesWithPostOps<ZkEENonDeterminismSource<DummyMemorySource>>,
-            >::run::<BasicBootloaderForwardETHLikeConfig>(
-                oracle,
-                &mut result_keeper,
-                &mut nop_tracer,
-            )
-            .expect("must succeed");
+        let result_keeper = if PROOF_ENV {
+            if let Ok(result_keeper) = std::thread::spawn(move || {
+                let mut result_keeper = ForwardRunningResultKeeper::new(NoopTxCallback);
+                let mut nop_tracer = NopTracer::default();
+                BasicBootloader::<
+                    EthereumStorageSystemTypesWithPostOps<ZkEENonDeterminismSource<DummyMemorySource>>,
+                >::run::<BasicBootloaderForwardETHLikeConfig>(
+                    oracle,
+                    &mut result_keeper,
+                    &mut nop_tracer,
+                ).expect("must succeed");
+
+                result_keeper
+            }).join() {
+                // Simulated ok
+                result_keeper
+            } else {
+                // should save witness
+                let mut file = File::create(&format!("witness_{}.bin", block_number)).expect("should create file");
+                bincode::serialize_into(&mut file, &witness).expect("must write witness to file");
+                panic!("Failed to run the STF");
+            }
         } else {
+            let mut result_keeper = ForwardRunningResultKeeper::new(NoopTxCallback);
+            let mut nop_tracer = NopTracer::default();
             BasicBootloader::<
                 EthereumStorageSystemTypes<ZkEENonDeterminismSource<DummyMemorySource>>,
             >::run::<BasicBootloaderForwardETHLikeConfig>(
@@ -610,7 +625,9 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
                 &mut nop_tracer,
             )
             .expect("must succeed");
-        }
+
+            result_keeper
+        };
 
         if let Some(path) = witness_output_file {
             let mut oracle = ZkEENonDeterminismSource::default();

@@ -12,16 +12,16 @@ use zk_ee::{
 };
 
 #[derive(Clone, Debug)]
-pub struct ReadStorageResponder<S: ReadStorage> {
+pub struct ReadStorageResponder<S: ReadStorage + Send + Sync> {
     pub storage: S,
 }
 
-impl<S: ReadStorage> ReadStorageResponder<S> {
+impl<S: ReadStorage + Send + Sync> ReadStorageResponder<S> {
     const SUPPORTED_QUERY_IDS: &[u32] =
         &[InitialStorageSlotQuery::<EthereumIOTypesConfig>::QUERY_ID];
 }
 
-impl<S: ReadStorage, M: U32Memory> OracleQueryProcessor<M> for ReadStorageResponder<S> {
+impl<S: ReadStorage + Send + Sync, M: U32Memory> OracleQueryProcessor<M> for ReadStorageResponder<S> {
     fn supported_query_ids(&self) -> Vec<u32> {
         Self::SUPPORTED_QUERY_IDS.to_vec()
     }
@@ -35,7 +35,7 @@ impl<S: ReadStorage, M: U32Memory> OracleQueryProcessor<M> for ReadStorageRespon
         query_id: u32,
         query: Vec<usize>,
         _memory: &M,
-    ) -> Box<dyn ExactSizeIterator<Item = usize> + 'static> {
+    ) -> Box<dyn ExactSizeIterator<Item = usize> + 'static + Send + Sync> {
         assert!(Self::SUPPORTED_QUERY_IDS.contains(&query_id));
 
         match query_id {

@@ -54,7 +54,7 @@ pub use self::query_processors::*;
 
 pub type StorageCommitment = FlatStorageCommitment<{ TREE_HEIGHT }>;
 
-pub fn run_batch<T: ReadStorageTree, PS: PreimageSource, TS: TxSource, TR: TxResultCallback>(
+pub fn run_batch<T: ReadStorageTree + Send + Sync, PS: PreimageSource + Send + Sync, TS: TxSource + Send + Sync, TR: TxResultCallback>(
     batch_context: BatchContext,
     tree: T,
     preimage_source: PS,
@@ -85,7 +85,7 @@ pub fn run_batch<T: ReadStorageTree, PS: PreimageSource, TS: TxSource, TR: TxRes
 }
 
 // TODO: we should run it on native arch and it should return pubdata and other outputs via result keeper
-pub fn generate_proof_input<T: ReadStorageTree, PS: PreimageSource, TS: TxSource>(
+pub fn generate_proof_input<T: ReadStorageTree + Send + Sync, PS: PreimageSource + Send + Sync, TS: TxSource + Send + Sync>(
     zk_os_program_path: PathBuf,
     batch_context: BatchContext,
     proof_data: ProofData<StorageCommitment>,
@@ -125,10 +125,10 @@ pub fn generate_proof_input<T: ReadStorageTree, PS: PreimageSource, TS: TxSource
 }
 
 pub fn make_oracle_for_proofs_and_dumps<
-    T: ReadStorageTree,
-    PS: PreimageSource,
-    TS: TxSource,
-    M: U32Memory + 'static,
+    T: ReadStorageTree + Send + Sync,
+    PS: PreimageSource + Send + Sync,
+    TS: TxSource + Send + Sync,
+    M: U32Memory + 'static + Send + Sync,
 >(
     batch_context: BatchContext,
     tree: T,
@@ -148,10 +148,10 @@ pub fn make_oracle_for_proofs_and_dumps<
 }
 
 pub fn make_oracle_for_proofs_and_dumps_for_init_data<
-    T: ReadStorageTree,
-    PS: PreimageSource,
-    TS: TxSource,
-    M: U32Memory + 'static,
+    T: ReadStorageTree + Send + Sync,
+    PS: PreimageSource + Send + Sync,
+    TS: TxSource + Send + Sync,
+    M: U32Memory + 'static + Send + Sync,
 >(
     batch_context: BatchContext,
     tree: T,
@@ -189,9 +189,9 @@ pub fn make_oracle_for_proofs_and_dumps_for_init_data<
 }
 
 pub fn run_batch_with_oracle_dump<
-    T: ReadStorageTree + Clone + serde::Serialize,
-    PS: PreimageSource + Clone + serde::Serialize,
-    TS: TxSource + Clone + serde::Serialize,
+    T: ReadStorageTree + Clone + serde::Serialize + Send + Sync,
+    PS: PreimageSource + Clone + serde::Serialize + Send + Sync,
+    TS: TxSource + Clone + serde::Serialize + Send + Sync,
     TR: TxResultCallback,
 >(
     batch_context: BatchContext,
@@ -214,9 +214,9 @@ pub fn run_batch_with_oracle_dump<
 }
 
 pub fn run_batch_with_oracle_dump_ext<
-    T: ReadStorageTree + Clone + serde::Serialize,
-    PS: PreimageSource + Clone + serde::Serialize,
-    TS: TxSource + Clone + serde::Serialize,
+    T: ReadStorageTree + Clone + serde::Serialize + Send + Sync,
+    PS: PreimageSource + Clone + serde::Serialize + Send + Sync,
+    TS: TxSource + Clone + serde::Serialize + Send + Sync,
     TR: TxResultCallback,
     Config: BasicBootloaderExecutionConfig,
 >(
@@ -268,9 +268,9 @@ pub fn run_batch_with_oracle_dump_ext<
 }
 
 pub fn run_block_from_oracle_dump<
-    T: ReadStorageTree + Clone + serde::de::DeserializeOwned,
-    PS: PreimageSource + Clone + serde::de::DeserializeOwned,
-    TS: TxSource + Clone + serde::de::DeserializeOwned,
+    T: ReadStorageTree + Clone + serde::de::DeserializeOwned + Send + Sync,
+    PS: PreimageSource + Clone + serde::de::DeserializeOwned + Send + Sync,
+    TS: TxSource + Clone + serde::de::DeserializeOwned + Send + Sync,
 >(
     path: Option<String>,
     tracer: &mut impl Tracer<ForwardRunningSystem>,
@@ -311,7 +311,7 @@ pub fn run_block_from_oracle_dump<
 ///
 /// Needed for `eth_call` and `eth_estimateGas`.
 ///
-pub fn simulate_tx<S: ReadStorage, PS: PreimageSource>(
+pub fn simulate_tx<S: ReadStorage + Send + Sync, PS: PreimageSource + Send + Sync>(
     transaction: Vec<u8>,
     block_context: BatchContext,
     storage: S,
