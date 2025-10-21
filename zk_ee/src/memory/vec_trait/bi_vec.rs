@@ -30,7 +30,6 @@ impl<T: Sized, A: Allocator> CapacityChunk<T, A> {
             const { core::mem::size_of::<Self>() <= 8 * core::mem::size_of::<usize>() };
         debug_assert!(_self_size_is_small);
 
-        assert!(capacity > 0);
         let capacity = Box::new_uninit_slice_in(capacity, allocator);
 
         Self {

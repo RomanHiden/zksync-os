@@ -256,7 +256,7 @@ pub fn ecrecover_inner_with_oracle<
         &bits2field::<crypto::k256::Secp256k1>(digest).map_err(|_| ())?,
     );
 
-    let (mut sigr, mut sigs) = Scalar::from_signature(&signature);
+    let (sigr, mut sigs) = Scalar::from_signature(&signature);
     let message = Scalar::from_k256_scalar(message);
 
     // We go through bytes because it's mod GROUP_ORDER and later we need mod BASE FIELD
