@@ -35,7 +35,12 @@ impl<R: Resources> SystemFunctionExt<R, Secp256k1ECRecoverErrors> for EcRecoverI
     /// If the input is invalid(v != 27|28 or failed to recover signer) returns `Ok(0)`.
     ///
     /// Returns `OutOfGas` if not enough resources provided.
-    fn execute<O: zk_ee::system_io_oracle::IOOracle, L: zk_ee::system::logger::Logger, D: Extend<u8> + ?Sized, A: core::alloc::Allocator + Clone>(
+    fn execute<
+        O: zk_ee::system_io_oracle::IOOracle,
+        L: zk_ee::system::logger::Logger,
+        D: Extend<u8> + ?Sized,
+        A: core::alloc::Allocator + Clone,
+    >(
         input: &[u8],
         output: &mut D,
         resources: &mut R,
@@ -64,7 +69,11 @@ impl<R: Resources> SystemFunctionExt<R, Secp256k1ECRecoverErrors> for EcRecoverI
                 Ok(cycle_marker::wrap_with_resources!(
                     "ecrecover",
                     resources,
-                    { ecrecover_as_system_function_inner_with_oracle(input, output, resources, oracle, logger) }
+                    {
+                        ecrecover_as_system_function_inner_with_oracle(
+                            input, output, resources, oracle, logger,
+                        )
+                    }
                 )?)
             } else {
                 Ok(cycle_marker::wrap_with_resources!(
@@ -166,7 +175,7 @@ fn ecrecover_as_system_function_inner_with_oracle<
     D: ?Sized + Extend<u8>,
     R: Resources,
     O: zk_ee::system_io_oracle::IOOracle,
-    L: zk_ee::system::logger::Logger
+    L: zk_ee::system::logger::Logger,
 >(
     src: &S,
     dst: &mut D,
@@ -222,7 +231,7 @@ fn ecrecover_as_system_function_inner_with_oracle<
 #[cfg(target_arch = "riscv32")]
 pub fn ecrecover_inner_with_oracle<
     O: zk_ee::system_io_oracle::IOOracle,
-    L: zk_ee::system::logger::Logger
+    L: zk_ee::system::logger::Logger,
 >(
     digest: &[u8; 32],
     r: &[u8; 32],
@@ -231,13 +240,13 @@ pub fn ecrecover_inner_with_oracle<
     oracle: &mut O,
     _logger: &mut L,
 ) -> Result<crypto::k256::EncodedPoint, ()> {
-    use crate::system_functions::{FIELD_OPS_ADVISE_QUERY_ID, FieldHintOp, FieldOpsHint};
+    use crate::system_functions::{FieldHintOp, FieldOpsHint, FIELD_OPS_ADVISE_QUERY_ID};
     use crypto::k256::{
         ecdsa::{hazmat::bits2field, RecoveryId, Signature},
         elliptic_curve::ops::Reduce,
         Scalar as K256Scalar,
     };
-    use crypto::secp256k1::{ecmult, Scalar, FieldElement, Affine, ECRECOVER_CONTEXT};
+    use crypto::secp256k1::{ecmult, Affine, FieldElement, Scalar, ECRECOVER_CONTEXT};
     use zk_ee::utils::Bytes32;
 
     let signature = Signature::from_scalars(*r, *s).map_err(|_| ())?;
@@ -255,8 +264,8 @@ pub fn ecrecover_inner_with_oracle<
     let mut brx = sigr.to_repr();
 
     if recovery_id.is_x_reduced() {
-        use crypto::k256::elliptic_curve::{Curve, FieldBytesEncoding};
         use crypto::k256::elliptic_curve::bigint::CheckedAdd;
+        use crypto::k256::elliptic_curve::{Curve, FieldBytesEncoding};
         match <crypto::k256::U256 as FieldBytesEncoding<crypto::k256::Secp256k1>>::decode_field_bytes(&brx)
             .checked_add(&crypto::k256::Secp256k1::ORDER)
             .into_option()
@@ -275,7 +284,7 @@ pub fn ecrecover_inner_with_oracle<
     let x = {
         let x_bytes: [u8; 32] = brx.into();
         let Some(x) = FieldElement::from_bytes(&x_bytes) else {
-            return Err(())
+            return Err(());
         };
 
         // actually recover
@@ -295,7 +304,12 @@ pub fn ecrecover_inner_with_oracle<
                     src_ptr: input.as_u8_array_ref().as_ptr().addr() as u32,
                     src_len_u32_words: 8,
                 };
-                oracle.query_serializable(FIELD_OPS_ADVISE_QUERY_ID, &((&hint_request as *const FieldOpsHint).addr() as u32)).map_err(|_| ())?
+                oracle
+                    .query_serializable(
+                        FIELD_OPS_ADVISE_QUERY_ID,
+                        &((&hint_request as *const FieldOpsHint).addr() as u32),
+                    )
+                    .map_err(|_| ())?
             };
             // answer is must be a field element
             let Some(fe) = FieldElement::from_bytes(square_root.as_u8_array_ref()) else {
@@ -325,9 +339,7 @@ pub fn ecrecover_inner_with_oracle<
         }
 
         // SAFETY: we recovered coordinates in a checked manner
-        let x = unsafe {
-            Affine::from_xy_unchecked(x, y)
-        };
+        let x = unsafe { Affine::from_xy_unchecked(x, y) };
 
         x
     };
@@ -353,7 +365,12 @@ pub fn ecrecover_inner_with_oracle<
                 src_ptr: input.as_u8_array_ref().as_ptr().addr() as u32,
                 src_len_u32_words: 8,
             };
-            oracle.query_serializable(FIELD_OPS_ADVISE_QUERY_ID, &((&hint_request as *const FieldOpsHint).addr() as u32)).map_err(|_| ())?
+            oracle
+                .query_serializable(
+                    FIELD_OPS_ADVISE_QUERY_ID,
+                    &((&hint_request as *const FieldOpsHint).addr() as u32),
+                )
+                .map_err(|_| ())?
         };
         // answer is must be a field element
         use crypto::rust_k256::elliptic_curve::scalar::FromUintUnchecked;
@@ -362,7 +379,8 @@ pub fn ecrecover_inner_with_oracle<
 
         let inverse = U256::from_be_slice(inverse.as_u8_array_ref());
         assert!(inverse < crypto::rust_k256::Secp256k1::ORDER);
-        let inverse: Scalar = Scalar::from_k256_scalar(crypto::rust_k256::Scalar::from_uint_unchecked(inverse));
+        let inverse: Scalar =
+            Scalar::from_k256_scalar(crypto::rust_k256::Scalar::from_uint_unchecked(inverse));
         let mut t = sigr;
         t *= &inverse;
         t = t - Scalar::ONE;
@@ -394,7 +412,12 @@ pub fn ecrecover_inner_with_oracle<
                     src_ptr: input.as_u8_array_ref().as_ptr().addr() as u32,
                     src_len_u32_words: 8,
                 };
-                oracle.query_serializable(FIELD_OPS_ADVISE_QUERY_ID, &((&hint_request as *const FieldOpsHint).addr() as u32)).map_err(|_| ())?
+                oracle
+                    .query_serializable(
+                        FIELD_OPS_ADVISE_QUERY_ID,
+                        &((&hint_request as *const FieldOpsHint).addr() as u32),
+                    )
+                    .map_err(|_| ())?
             };
 
             // answer is must be a field element
@@ -414,9 +437,7 @@ pub fn ecrecover_inner_with_oracle<
         x *= pk_jacobian.x();
         y *= pk_jacobian.y();
 
-        let pk = unsafe {
-            Affine::from_xy_unchecked(x, y)
-        };
+        let pk = unsafe { Affine::from_xy_unchecked(x, y) };
 
         pk
     };

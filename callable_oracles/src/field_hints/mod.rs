@@ -1,15 +1,13 @@
-use basic_system::system_functions::{FieldOpsHint, FieldHintOp, FIELD_OPS_ADVISE_QUERY_ID};
+use basic_system::system_functions::{FieldHintOp, FieldOpsHint, FIELD_OPS_ADVISE_QUERY_ID};
 use oracle_provider::OracleQueryProcessor;
 use oracle_provider::U32Memory;
-use zk_ee::utils::Bytes32;
 use zk_ee::kv_markers::UsizeSerializable;
 use zk_ee::system_io_oracle::dyn_usize_iterator::DynUsizeIterator;
+use zk_ee::utils::Bytes32;
 
 mod impls;
 
-use crate::utils::{
-    evaluate::{read_memory_as_u64, read_struct},
-};
+use crate::utils::evaluate::{read_memory_as_u64, read_struct};
 
 pub struct FieldOpsQuery<M: U32Memory> {
     _marker: std::marker::PhantomData<M>,
@@ -59,7 +57,14 @@ impl<M: U32Memory> OracleQueryProcessor<M> for FieldOpsQuery<M> {
         assert!(arg.src_ptr > 0);
         assert_eq!(arg.src_len_u32_words, 8);
         let n = read_memory_as_u64(memory, arg.src_ptr, arg.src_len_u32_words / 2).unwrap();
-        let n = Bytes32::from_array(n.into_iter().map(|el| el.to_le_bytes()).flatten().collect::<Vec<_>>().try_into().unwrap());
+        let n = Bytes32::from_array(
+            n.into_iter()
+                .map(|el| el.to_le_bytes())
+                .flatten()
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+        );
 
         match op {
             FieldHintOp::Secp256k1BaseFieldSqrt => {

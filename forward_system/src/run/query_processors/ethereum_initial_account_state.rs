@@ -41,11 +41,6 @@ impl<M: U32Memory> OracleQueryProcessor<M> for InMemoryEthereumInitialAccountSta
         let address = B160::from_iter(&mut query.into_iter()).expect("must deserialize hash value");
 
         let account = if let Some(data) = self.source.get(&address).copied() {
-            if format!("0x{:040x}", address.as_uint())
-                == "0x9313b45f7aec45415e786e0abedc0f9ca5be71df"
-            {
-                panic!();
-            }
             data
         } else {
             // there are some values that didn't show up in witness,

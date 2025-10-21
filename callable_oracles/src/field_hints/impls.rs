@@ -1,6 +1,6 @@
 use crypto::secp256k1::FieldElement;
-use zk_ee::utils::Bytes32;
 use k256::{Scalar, U256};
+use zk_ee::utils::Bytes32;
 
 pub(crate) fn secp256k1_base_field_sqrt(input: Bytes32) -> (Bytes32, bool) {
     // NOTE: input is in normal form
@@ -28,9 +28,9 @@ pub(crate) fn secp256k1_base_field_inverse(input: Bytes32) -> Bytes32 {
 }
 
 pub(crate) fn secp256k1_scalar_field_inverse(input: Bytes32) -> Bytes32 {
+    use k256::elliptic_curve::ops::Invert;
     use k256::elliptic_curve::scalar::FromUintUnchecked;
     use k256::elliptic_curve::Curve;
-    use k256::elliptic_curve::ops::Invert;
 
     // NOTE: input is in normal form
     let el = U256::from_be_slice(input.as_u8_array_ref());

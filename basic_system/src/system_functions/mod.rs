@@ -33,16 +33,14 @@ pub enum FieldHintOp {
 impl FieldHintOp {
     pub fn parse_u32(value: u32) -> Option<Self> {
         match value {
-            a if a == (Self::Secp256k1BaseFieldSqrt as u32) => {
-                Some(Self::Secp256k1BaseFieldSqrt)
-            }
+            a if a == (Self::Secp256k1BaseFieldSqrt as u32) => Some(Self::Secp256k1BaseFieldSqrt),
             a if a == (Self::Secp256k1BaseFieldInverse as u32) => {
                 Some(Self::Secp256k1BaseFieldInverse)
             }
             a if a == (Self::Secp256k1ScalarFieldInverse as u32) => {
                 Some(Self::Secp256k1ScalarFieldInverse)
             }
-            _ => None
+            _ => None,
         }
     }
 }

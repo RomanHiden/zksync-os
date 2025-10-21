@@ -487,7 +487,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         headers.reverse();
         assert_eq!(headers.len(), witness.headers.len());
 
-        let block_number = headers[0].number;
+        let block_number = headers[0].number + 1;
 
         let mut headers_encodings: Vec<_> =
             witness.headers.iter().map(|el| el.0.to_vec()).collect();
@@ -591,26 +591,32 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         oracle.add_external_processor(UARTPrintReponsder);
         oracle.add_external_processor(callable_oracles::arithmetic::ArithmeticQuery::default());
         oracle.add_external_processor(callable_oracles::field_hints::FieldOpsQuery::default());
-        
+
         let result_keeper = if PROOF_ENV {
             if let Ok(result_keeper) = std::thread::spawn(move || {
                 let mut result_keeper = ForwardRunningResultKeeper::new(NoopTxCallback);
                 let mut nop_tracer = NopTracer::default();
                 BasicBootloader::<
-                    EthereumStorageSystemTypesWithPostOps<ZkEENonDeterminismSource<DummyMemorySource>>,
+                    EthereumStorageSystemTypesWithPostOps<
+                        ZkEENonDeterminismSource<DummyMemorySource>,
+                    >,
                 >::run::<BasicBootloaderForwardETHLikeConfig>(
                     oracle,
                     &mut result_keeper,
                     &mut nop_tracer,
-                ).expect("must succeed");
+                )
+                .expect("must succeed");
 
                 result_keeper
-            }).join() {
+            })
+            .join()
+            {
                 // Simulated ok
                 result_keeper
             } else {
                 // should save witness
-                let mut file = File::create(&format!("witness_{}.bin", block_number)).expect("should create file");
+                let mut file = File::create(&format!("witness_{}.bin", block_number))
+                    .expect("should create file");
                 bincode::serialize_into(&mut file, &witness).expect("must write witness to file");
                 panic!("Failed to run the STF");
             }

@@ -87,7 +87,10 @@ impl<M: U32Memory> Default for ZkEENonDeterminismSource<M> {
 
 impl<M: U32Memory> ZkEENonDeterminismSource<M> {
     #[track_caller]
-    pub fn add_external_processor<P: OracleQueryProcessor<M> + 'static + Send + Sync>(&mut self, processor: P) {
+    pub fn add_external_processor<P: OracleQueryProcessor<M> + 'static + Send + Sync>(
+        &mut self,
+        processor: P,
+    ) {
         let query_ids = processor.supported_query_ids();
         let processor_id = self.processors.len();
         for id in query_ids.into_iter() {

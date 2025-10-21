@@ -277,8 +277,10 @@ fn recover_authority<S: EthereumLikeTypes>(
     resources: &mut S::Resources,
     auth_sig_data: (u8, &[u8], &[u8]),
     msg: &[u8; 32],
-) -> Result<Option<B160>, TxError> where S::IO: IOSubsystemExt{
-    use zk_ee::system::SystemFunctions;
+) -> Result<Option<B160>, TxError>
+where
+    S::IO: IOSubsystemExt,
+{
     let mut ecrecover_input = [0u8; 128];
     let (parity, r, s) = auth_sig_data;
     ecrecover_input[0..32].copy_from_slice(msg);

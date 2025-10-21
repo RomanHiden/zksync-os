@@ -54,7 +54,12 @@ pub use self::query_processors::*;
 
 pub type StorageCommitment = FlatStorageCommitment<{ TREE_HEIGHT }>;
 
-pub fn run_batch<T: ReadStorageTree + Send + Sync, PS: PreimageSource + Send + Sync, TS: TxSource + Send + Sync, TR: TxResultCallback>(
+pub fn run_batch<
+    T: ReadStorageTree + Send + Sync,
+    PS: PreimageSource + Send + Sync,
+    TS: TxSource + Send + Sync,
+    TR: TxResultCallback,
+>(
     batch_context: BatchContext,
     tree: T,
     preimage_source: PS,
@@ -85,7 +90,11 @@ pub fn run_batch<T: ReadStorageTree + Send + Sync, PS: PreimageSource + Send + S
 }
 
 // TODO: we should run it on native arch and it should return pubdata and other outputs via result keeper
-pub fn generate_proof_input<T: ReadStorageTree + Send + Sync, PS: PreimageSource + Send + Sync, TS: TxSource + Send + Sync>(
+pub fn generate_proof_input<
+    T: ReadStorageTree + Send + Sync,
+    PS: PreimageSource + Send + Sync,
+    TS: TxSource + Send + Sync,
+>(
     zk_os_program_path: PathBuf,
     batch_context: BatchContext,
     proof_data: ProofData<StorageCommitment>,

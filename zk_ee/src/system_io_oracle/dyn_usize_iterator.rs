@@ -3,12 +3,17 @@ use alloc::boxed::Box;
 // We want to return kind-of owning iterator for UsizeSerializable,
 // and we imply that it'll be used only as Box<dyn _> when returned
 
-pub struct DynUsizeIterator<I: 'static + Send + Sync, IT: ExactSizeIterator<Item = usize> + 'static + Send + Sync> {
+pub struct DynUsizeIterator<
+    I: 'static + Send + Sync,
+    IT: ExactSizeIterator<Item = usize> + 'static + Send + Sync,
+> {
     item: I,
     iterator: Option<IT>,
 }
 
-impl<I: 'static + Send + Sync, IT: ExactSizeIterator<Item = usize> + 'static  + Send + Sync> DynUsizeIterator<I, IT> {
+impl<I: 'static + Send + Sync, IT: ExactSizeIterator<Item = usize> + 'static + Send + Sync>
+    DynUsizeIterator<I, IT>
+{
     pub fn from_constructor<FN: FnOnce(&'static I) -> IT>(
         item: I,
         closure: FN,
@@ -55,15 +60,17 @@ impl<I: 'static + Send + Sync, IT: ExactSizeIterator<Item = usize> + 'static + S
     }
 }
 
-impl<I: 'static + Send + Sync, IT: ExactSizeIterator<Item = usize> + 'static + Send + Sync> ExactSizeIterator
-    for DynUsizeIterator<I, IT>
+impl<I: 'static + Send + Sync, IT: ExactSizeIterator<Item = usize> + 'static + Send + Sync>
+    ExactSizeIterator for DynUsizeIterator<I, IT>
 {
     fn len(&self) -> usize {
         self.iterator.as_ref().map(|it| it.len()).unwrap_or(0)
     }
 }
 
-impl<I: 'static + Send + Sync, IT: ExactSizeIterator<Item = usize> + 'static + Send + Sync> Drop for DynUsizeIterator<I, IT> {
+impl<I: 'static + Send + Sync, IT: ExactSizeIterator<Item = usize> + 'static + Send + Sync> Drop
+    for DynUsizeIterator<I, IT>
+{
     fn drop(&mut self) {
         // we do not move, so iterating is ok
         drop(self.iterator.take());

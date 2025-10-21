@@ -883,6 +883,7 @@ where
     S::IO: IOSubsystemExt,
 {
     let mut resources_in_caller_frame = call_request.available_resources.take();
+    let is_potential_transfer_to_callee = call_request.nominal_token_value != U256::ZERO && call_request.is_delegate() == false;
 
     let r = if IS_ENTRY_FRAME {
         // For entry frame we don't charge ergs for call preparation,
@@ -891,6 +892,18 @@ where
             read_callee_account_properties(system, ee_version, inf_resources, &call_request)
         })
     } else {
+        // we will cover worst case - if we are doing transfer and go OOG,
+        // even though concerete cost can be made more precise later on. It allows us to bail early
+        if is_potential_transfer_to_callee && ee_version == ExecutionEnvironmentType::EVM {
+            let Ok(..) = resources_in_caller_frame.charge(&S::Resources::from_ergs(Ergs(
+                evm_interpreter::gas_constants::CALLVALUE * evm_interpreter::ERGS_PER_GAS,
+            ))) else {
+                return Ok(CallPreparationResult::Failure {
+                    resources_in_caller_frame,
+                });
+            };
+        }
+
         read_callee_account_properties(
             system,
             ee_version,
@@ -913,35 +926,41 @@ where
     };
 
     // Check transfer is allowed and determine transfer target
-    let transfer_to_perform =
-        if call_request.nominal_token_value != U256::ZERO && !call_request.is_delegate() {
-            if !call_request.is_transfer_allowed() {
-                let _ = system.get_logger().write_fmt(format_args!(
-                    "Call failed: positive value with modifier {:?}\n",
-                    call_request.modifier
-                ));
-                return Ok(CallPreparationResult::Failure {
-                    resources_in_caller_frame,
-                });
-            }
-            // Adjust transfer target due to CALLCODE
-            let target = match call_request.modifier {
-                CallModifier::EVMCallcode | CallModifier::EVMCallcodeStatic => call_request.caller,
-                _ => call_request.callee,
-            };
-            Some(TransferInfo {
-                value: call_request.nominal_token_value,
-                target,
-            })
-        } else {
-            None
+    let transfer_to_perform = if is_potential_transfer_to_callee {
+        if !call_request.is_transfer_allowed() {
+            let _ = system.get_logger().write_fmt(format_args!(
+                "Call failed: positive value with modifier {:?}\n",
+                call_request.modifier
+            ));
+            return Ok(CallPreparationResult::Failure {
+                resources_in_caller_frame,
+            });
+        }
+        // Adjust transfer target due to CALLCODE
+        let target = match call_request.modifier {
+            CallModifier::EVMCallcode | CallModifier::EVMCallcodeStatic => call_request.caller,
+            _ => call_request.callee,
         };
+        Some(TransferInfo {
+            value: call_request.nominal_token_value,
+            target,
+        })
+    } else {
+        None
+    };
 
     // If we're in the entry frame, i.e. not the execution of a CALL opcode,
     // we don't apply the CALL-specific gas charging, but instead set
     // resources_for_callee_frame equal to the available resources
     let resources_for_callee_frame = if !IS_ENTRY_FRAME {
         // now we should ask current EE to calculate resources for the callee frame
+
+        // NOTE: add back after quick and dirty check for non-zero value
+        if is_potential_transfer_to_callee && ee_version == ExecutionEnvironmentType::EVM {
+            resources_in_caller_frame.add_ergs(Ergs(
+                evm_interpreter::gas_constants::CALLVALUE * evm_interpreter::ERGS_PER_GAS,
+            ));
+        }
         let mut callee_resources =
             match SupportedEEVMState::<S>::calculate_resources_passed_in_external_call(
                 ee_version,
