@@ -18,7 +18,6 @@ use crypto::secp256k1::SECP256K1N_HALF;
 use evm_interpreter::interpreter::CreateScheme;
 use evm_interpreter::{ERGS_PER_GAS, MAX_INITCODE_SIZE};
 use ruint::aliases::{B160, U256};
-use system_hooks::addresses_constants::BOOTLOADER_FORMAL_ADDRESS;
 use system_hooks::HooksStorage;
 use zk_ee::execution_environment_type::ExecutionEnvironmentType;
 use zk_ee::memory::ArrayBuilder;
@@ -320,25 +319,22 @@ where
         _tx_hash: Bytes32,
         _suggested_signed_hash: Bytes32,
         transaction: &Transaction<S::Allocator>,
+        gas_price: U256,
         from: B160,
         caller_ee_type: ExecutionEnvironmentType,
         resources: &mut S::Resources,
         _tracer: &mut impl Tracer<S>,
     ) -> Result<(), TxError> {
-        let amount = transaction
-            .max_fee_per_gas()
+        let amount = gas_price
             .checked_mul(U256::from(transaction.gas_limit()))
-            .ok_or(internal_error!("mfpg*gl"))?;
-        let amount = U256::from(amount);
+            .ok_or(internal_error!("gp*gl"))?;
+        // ARCHITECTURE NOTE: Fee payment is split into two phases:
+        // 1. Deduct full fee from sender at transaction start (here)
+        // 2. Transfer actual payment to operator after execution (in refund_transaction_and_pay_operator)
+        // This ensures sender has sufficient funds before execution begins
         system
             .io
-            .transfer_nominal_token_value(
-                caller_ee_type,
-                resources,
-                &from,
-                &BOOTLOADER_FORMAL_ADDRESS,
-                &amount,
-            )
+            .update_account_nominal_token_balance(caller_ee_type, resources, &from, &amount, true)
             .map_err(|e| match e {
                 SubsystemError::LeafUsage(interface_error) => {
                     let _ = system
