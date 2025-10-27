@@ -255,7 +255,7 @@ impl EthProofsConnector {
 
     pub fn select_block(&self, candidate_block: u64) -> u64 {
         if self.staging {
-            candidate_block
+            candidate_block - (candidate_block % 10)
         } else {
             // In production we pick every 100th block.
             candidate_block - (candidate_block % 100)
