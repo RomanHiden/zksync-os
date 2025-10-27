@@ -2,7 +2,7 @@ use crate::block::Block;
 use crate::block_hashes::BlockHashes;
 use crate::calltrace::CallTrace;
 use crate::dump_utils::AccountStateDiffs;
-use crate::live_run::rpc;
+use crate::live_run::rpc::{self, EthProofPayload};
 use crate::native_model::compute_ratio;
 use crate::post_check::{post_check, post_check_ext};
 use crate::prestate::{populate_prestate, DiffTrace, PrestateTrace};
@@ -16,6 +16,12 @@ use alloy_rpc_types_eth::Withdrawal;
 use anyhow::Context;
 use anyhow::Ok;
 use anyhow::Result;
+use base64::Engine;
+use bincode::config::standard;
+use cli_lib::prover_utils::{
+    create_proofs_internal, create_recursion_proofs_with_machine, GpuSharedState, MainCircuitType,
+};
+use execution_utils::{Machine, ProgramProof, RecursionStrategy};
 use forward_system::run::output::map_tx_results;
 use rig::log::info;
 use rig::*;
@@ -35,35 +41,52 @@ fn eth_run(
     block_hashes: Vec<U256>,
     witness: alloy_rpc_types_debug::ExecutionWitness,
     withdrawals_encoding: Vec<u8>,
-) -> anyhow::Result<()> {
+    write_to_file: bool,
+    app: Option<String>,
+) -> anyhow::Result<Vec<u32>> {
     chain.set_last_block_number(block_number - 1);
 
     chain.set_block_hashes(block_hashes.try_into().unwrap());
 
-    let witness_output_dir = {
+    let witness_output_dir = if write_to_file {
         let mut suffix = block_number.to_string();
         suffix.push_str("_witness");
-        std::path::PathBuf::from(&suffix)
+        Some(std::path::PathBuf::from(&suffix))
+    } else {
+        None
     };
-    let _result_keeper = chain.run_eth_block::<true>(
+    let (_result_keeper, witness) = chain.run_eth_block_with_options::<true>(
         transactions,
         witness,
         header,
         withdrawals_encoding,
-        Some(witness_output_dir),
-        None,
+        witness_output_dir,
+        app,
+        true,
+        true,
     );
 
-    Ok(())
+    Ok(witness.unwrap())
 }
 
-pub fn ethproofs_run(block_number: u64, reth_endpoint: &str) -> anyhow::Result<()> {
+/// Runs ethproofs to generate execution witness for a given block number.
+/// Returns the witness and the duration it took to generate it (without time spent on fetching data).
+pub fn ethproofs_run(
+    block_number: u64,
+    reth_endpoint: &str,
+    write_to_file: bool,
+    app: Option<String>,
+) -> anyhow::Result<(Vec<u32>, f64)> {
     // Fetch data from RPC endpoints
     let block = rpc::get_block(reth_endpoint, block_number)
         .context(format!("Failed to fetch block for {block_number}"))?;
     let witness = rpc::get_witness(reth_endpoint, block_number)
         .context(format!("Failed to fetch witness for {block_number}"))?
         .result;
+
+    // get current time
+    let current_time = std::time::SystemTime::now();
+
     let mut headers: Vec<Header> = witness
         .headers
         .iter()
@@ -82,15 +105,9 @@ pub fn ethproofs_run(block_number: u64, reth_endpoint: &str) -> anyhow::Result<(
 
     info!("Running block: {block_number}");
     info!("Block gas used: {}", block.result.header.gas_used);
-    let miner = block.result.header.beneficiary;
 
     let header = block.result.header.clone().into();
-    let withdrawals = block
-        .result
-        .withdrawals
-        .clone()
-        .map(|el| el.0)
-        .unwrap_or_default();
+
     let withdrawals_encoding = if let Some(withdrawals) = block.result.withdrawals.clone() {
         let mut buff = vec![];
         withdrawals.encode(&mut buff);
@@ -102,7 +119,7 @@ pub fn ethproofs_run(block_number: u64, reth_endpoint: &str) -> anyhow::Result<(
     let transactions = block.get_all_raw_transactions();
 
     let chain = Chain::empty(Some(ETH_CHAIN_ID));
-    eth_run(
+    let witness = eth_run(
         chain,
         header,
         block_number,
@@ -110,7 +127,13 @@ pub fn ethproofs_run(block_number: u64, reth_endpoint: &str) -> anyhow::Result<(
         block_hashes,
         witness,
         withdrawals_encoding,
-    )
+        write_to_file,
+        app,
+    )?;
+    // compute time taken
+    let duration = current_time.elapsed().unwrap();
+    println!("Time taken: {:?}", duration);
+    Ok((witness, duration.as_secs_f64()))
 }
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5);
@@ -119,17 +142,150 @@ const CONFIRMATIONS: u64 = 2;
 pub fn ethproofs_live_run(reth_endpoint: &str) -> anyhow::Result<()> {
     let mut next = rpc::get_block_number(reth_endpoint)?.saturating_sub(CONFIRMATIONS);
 
-    ethproofs_run(next, reth_endpoint)?;
+    ethproofs_run(next, reth_endpoint, true, None)?;
 
     loop {
         let head = rpc::get_block_number(reth_endpoint)?.saturating_sub(CONFIRMATIONS);
         if head > next {
             for n in (next + 1)..=head {
-                ethproofs_run(n, reth_endpoint)?;
+                ethproofs_run(n, reth_endpoint, true, None)?;
             }
             next = head;
         } else {
             sleep(POLL_INTERVAL);
         }
+    }
+}
+
+pub fn ethproofs_with_proofs(
+    reth_endpoint: &str,
+    bin_path: String,
+    connector: EthProofsConnector,
+) -> anyhow::Result<()> {
+    let binary = cli_lib::prover_utils::load_binary_from_path(&bin_path);
+    let num_instances = 500;
+    let recursion_circuit_type = MainCircuitType::ReducedRiscVLog23Machine;
+    let mut gpu_state = Some(GpuSharedState::new(&binary, recursion_circuit_type));
+
+    let mut gpu_state = gpu_state.as_mut();
+
+    let mut next = 0;
+
+    loop {
+        let head = rpc::get_block_number(reth_endpoint)?;
+        let head = connector.select_block(head);
+        if head > next {
+            println!("Generating proof for block {}", head);
+            let (witness, duration) = ethproofs_run(
+                head,
+                reth_endpoint,
+                false,
+                None, //Some(bin_path_without_bin.clone()),
+            )?;
+            let mut total_proof_time = Some(duration);
+
+            let (proof_list, proof_metadata) = create_proofs_internal(
+                &binary,
+                witness,
+                &Machine::Standard,
+                num_instances,
+                None,
+                &mut gpu_state,
+                &mut total_proof_time,
+            );
+            // approx number of cycles.
+            let cycles = proof_list.basic_proofs.len() * (1 << 22);
+
+            let recursion_mode = RecursionStrategy::UseReducedLog23Machine;
+
+            let (recursion_proof_list, recursion_proof_metadata) =
+                create_recursion_proofs_with_machine(
+                    proof_list,
+                    proof_metadata,
+                    recursion_mode,
+                    &None,
+                    &Machine::ReducedLog23,
+                    &mut gpu_state,
+                    &mut total_proof_time,
+                );
+            let program_proof = ProgramProof::from_proof_list_and_metadata(
+                &recursion_proof_list,
+                &recursion_proof_metadata,
+            );
+            // Bincode serialize and then base64 encode the proof.
+            let serialized_proof = bincode::serde::encode_to_vec(&program_proof, standard())
+                .context("Failed to serialize the program proof")?;
+            let encoded_proof = base64::engine::general_purpose::STANDARD.encode(&serialized_proof);
+
+            connector.send_proof(
+                head,
+                &encoded_proof,
+                total_proof_time.unwrap(),
+                cycles as u64,
+            )?;
+
+            next = head;
+        } else {
+            sleep(POLL_INTERVAL);
+        }
+    }
+}
+
+pub struct EthProofsConnector {
+    pub staging: bool,
+    pub auth_token: String,
+    pub cluster_id: u64,
+    pub url: String,
+}
+
+impl EthProofsConnector {
+    pub fn new(staging: bool, auth_token: String, cluster_id: u64) -> Self {
+        let url = if staging {
+            "https://staging--ethproofs.netlify.app/api/v0/".to_string()
+        } else {
+            "https://ethproofs.netlify.app/api/v0/".to_string()
+        };
+        Self {
+            staging,
+            auth_token,
+            cluster_id,
+            url,
+        }
+    }
+
+    pub fn select_block(&self, candidate_block: u64) -> u64 {
+        if self.staging {
+            candidate_block
+        } else {
+            // In production we pick every 100th block.
+            candidate_block - (candidate_block % 100)
+        }
+    }
+    pub fn send_proof(
+        &self,
+        block_number: u64,
+        serialized_proof: &str,
+        time_spent: f64,
+        cycles: u64,
+    ) -> anyhow::Result<()> {
+        println!(
+            "Sending proof for block {} to ethproofs server, time spent: {}s , proof size: {} bytes",
+            block_number, time_spent, serialized_proof.len()
+        );
+        let payload = EthProofPayload {
+            block_number,
+            cluster_id: self.cluster_id,
+            proving_time: (time_spent * 1000.0) as u64,
+            proving_cycles: cycles,
+            proof: serialized_proof.to_string(),
+            verifier_id: "None".to_string(),
+        };
+        let response = rpc::send_ethproofs(
+            &format!("{}proofs/proved", self.url),
+            self.auth_token.clone(),
+            payload,
+        )?;
+        println!("Response from server: {}", response);
+        Ok(())
     }
 }

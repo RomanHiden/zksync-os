@@ -3,6 +3,8 @@
 
 use clap::{Parser, Subcommand};
 use ethproofs::ethproofs_live_run;
+
+use crate::ethproofs::EthProofsConnector;
 mod block;
 mod block_hashes;
 mod calltrace;
@@ -90,6 +92,21 @@ enum Command {
         #[arg(long)]
         reth_endpoint: String,
     },
+    // Prove ethereum blocks for Ethproofs live
+    EthproofsWithProofs {
+        #[arg(long)]
+        reth_endpoint: String,
+        #[arg(long)]
+        bin_path: String,
+        // If staging is set, then proofs will be sent to staging server and we pick next available block.
+        // If not set, then proofs will be sent to production server and we every 100th block.
+        #[arg(long)]
+        staging: bool,
+        #[arg(long)]
+        auth_token: String,
+        #[arg(long)]
+        cluster_id: u64,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -133,8 +150,21 @@ fn main() -> anyhow::Result<()> {
         Command::EthproofsRun {
             block_number,
             reth_endpoint,
-        } => ethproofs::ethproofs_run(block_number, &reth_endpoint),
+        } => {
+            ethproofs::ethproofs_run(block_number, &reth_endpoint, true, None)?;
+            Ok(())
+        }
         Command::EthproofsLiveRun { reth_endpoint } => ethproofs_live_run(&reth_endpoint),
+        Command::EthproofsWithProofs {
+            reth_endpoint,
+            bin_path,
+            staging,
+            auth_token,
+            cluster_id,
+        } => {
+            let connector = EthProofsConnector::new(staging, auth_token, cluster_id);
+            ethproofs::ethproofs_with_proofs(&reth_endpoint, bin_path, connector)
+        }
     }
 }
 

@@ -308,3 +308,33 @@ pub fn fetch_block_hashes_array(
 
     Ok(hashes)
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EthProofPayload {
+    pub block_number: u64,
+    pub cluster_id: u64,
+    // in millis
+    pub proving_time: u64,
+    pub proving_cycles: u64,
+    pub proof: String,
+    pub verifier_id: String,
+}
+
+pub fn send_ethproofs(
+    endpoint: &str,
+    auth_token: String,
+    proof: EthProofPayload,
+) -> Result<String> {
+    let agent: Agent = AgentBuilder::new().build();
+
+    let response = agent
+        .post(endpoint)
+        // Add bearer auth header
+        .set("Authorization", &format!("Bearer {}", auth_token))
+        .set("Content-Type", "application/json")
+        .send_json(proof)?;
+
+    let mut out = String::new();
+    response.into_reader().read_to_string(&mut out)?;
+    Ok(out)
+}

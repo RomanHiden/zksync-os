@@ -470,6 +470,33 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         witness_output_file: Option<PathBuf>,
         app: Option<String>,
     ) -> ForwardRunningResultKeeper<NoopTxCallback, PectraForkHeader> {
+        let (result_keeper, witness) = self.run_eth_block_with_options::<PROOF_ENV>(
+            transactions,
+            witness,
+            block_header,
+            withdrawals,
+            witness_output_file,
+            app,
+            true,
+            true,
+        );
+        result_keeper.unwrap()
+    }
+
+    pub fn run_eth_block_with_options<const PROOF_ENV: bool>(
+        &mut self,
+        transactions: Vec<Vec<u8>>,
+        witness: alloy_rpc_types_debug::ExecutionWitness,
+        block_header: Header,
+        withdrawals: Vec<u8>,
+        witness_output_file: Option<PathBuf>,
+        app: Option<String>,
+        compute_result_keeper: bool,
+        compute_witness: bool,
+    ) -> (
+        Option<ForwardRunningResultKeeper<NoopTxCallback, PectraForkHeader>>,
+        Option<Vec<u32>>,
+    ) {
         use crypto::MiniDigest;
         use std::collections::BTreeMap;
 
@@ -592,14 +619,41 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         oracle.add_external_processor(callable_oracles::arithmetic::ArithmeticQuery::default());
         oracle.add_external_processor(callable_oracles::field_hints::FieldOpsQuery::default());
 
-        let result_keeper = if PROOF_ENV {
-            if let Ok(result_keeper) = std::thread::spawn(move || {
+        let result_keeper = if compute_result_keeper {
+            if PROOF_ENV {
+                if let Ok(result_keeper) = std::thread::spawn(move || {
+                    let mut result_keeper = ForwardRunningResultKeeper::new(NoopTxCallback);
+                    let mut nop_tracer = NopTracer::default();
+                    BasicBootloader::<
+                        EthereumStorageSystemTypesWithPostOps<
+                            ZkEENonDeterminismSource<DummyMemorySource>,
+                        >,
+                    >::run::<BasicBootloaderForwardETHLikeConfig>(
+                        oracle,
+                        &mut result_keeper,
+                        &mut nop_tracer,
+                    )
+                    .expect("must succeed");
+
+                    result_keeper
+                })
+                .join()
+                {
+                    // Simulated ok
+                    Some(result_keeper)
+                } else {
+                    // should save witness
+                    let mut file = File::create(&format!("witness_{}.bin", block_number))
+                        .expect("should create file");
+                    bincode::serialize_into(&mut file, &witness)
+                        .expect("must write witness to file");
+                    panic!("Failed to run the STF");
+                }
+            } else {
                 let mut result_keeper = ForwardRunningResultKeeper::new(NoopTxCallback);
                 let mut nop_tracer = NopTracer::default();
                 BasicBootloader::<
-                    EthereumStorageSystemTypesWithPostOps<
-                        ZkEENonDeterminismSource<DummyMemorySource>,
-                    >,
+                    EthereumStorageSystemTypes<ZkEENonDeterminismSource<DummyMemorySource>>,
                 >::run::<BasicBootloaderForwardETHLikeConfig>(
                     oracle,
                     &mut result_keeper,
@@ -607,47 +661,29 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
                 )
                 .expect("must succeed");
 
-                result_keeper
-            })
-            .join()
-            {
-                // Simulated ok
-                result_keeper
-            } else {
-                // should save witness
-                let mut file = File::create(&format!("witness_{}.bin", block_number))
-                    .expect("should create file");
-                bincode::serialize_into(&mut file, &witness).expect("must write witness to file");
-                panic!("Failed to run the STF");
+                Some(result_keeper)
             }
         } else {
-            let mut result_keeper = ForwardRunningResultKeeper::new(NoopTxCallback);
-            let mut nop_tracer = NopTracer::default();
-            BasicBootloader::<
-                EthereumStorageSystemTypes<ZkEENonDeterminismSource<DummyMemorySource>>,
-            >::run::<BasicBootloaderForwardETHLikeConfig>(
-                oracle,
-                &mut result_keeper,
-                &mut nop_tracer,
-            )
-            .expect("must succeed");
-
-            result_keeper
+            None
         };
 
+        if witness_output_file.is_none() && !compute_witness {
+            return (result_keeper, None);
+        }
+
+        let mut oracle = ZkEENonDeterminismSource::default();
+        oracle.add_external_processor(target_header_reponsder);
+        oracle.add_external_processor(tx_data_responder);
+        oracle.add_external_processor(preimage_responder);
+        oracle.add_external_processor(initial_account_state_responder);
+        oracle.add_external_processor(initial_values_responder);
+        oracle.add_external_processor(cl_responder);
+        oracle.add_external_processor(UARTPrintReponsder);
+        oracle.add_external_processor(callable_oracles::arithmetic::ArithmeticQuery::default());
+        oracle.add_external_processor(callable_oracles::field_hints::FieldOpsQuery::default());
+        //let _ = Self::run_batch_via_transpiler::<false, 5>(oracle, &app);
+        let result = Self::run_batch_generate_witness::<false>(oracle, &app);
         if let Some(path) = witness_output_file {
-            let mut oracle = ZkEENonDeterminismSource::default();
-            oracle.add_external_processor(target_header_reponsder);
-            oracle.add_external_processor(tx_data_responder);
-            oracle.add_external_processor(preimage_responder);
-            oracle.add_external_processor(initial_account_state_responder);
-            oracle.add_external_processor(initial_values_responder);
-            oracle.add_external_processor(cl_responder);
-            oracle.add_external_processor(UARTPrintReponsder);
-            oracle.add_external_processor(callable_oracles::arithmetic::ArithmeticQuery::default());
-            oracle.add_external_processor(callable_oracles::field_hints::FieldOpsQuery::default());
-            //let _ = Self::run_batch_via_transpiler::<false, 5>(oracle, &app);
-            let result = Self::run_batch_generate_witness::<false>(oracle, &app);
             let mut file = File::create(&path).expect("should create file");
             let witness: Vec<u8> = result.iter().flat_map(|x| x.to_be_bytes()).collect();
             let hex = hex::encode(witness);
@@ -655,7 +691,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
                 .expect("should write to file");
         }
 
-        result_keeper
+        (result_keeper, Some(result))
     }
 
     ///
