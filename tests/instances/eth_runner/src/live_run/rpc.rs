@@ -15,8 +15,9 @@ use alloy_rpc_types_eth::{Account, EIP1186AccountProofResponse};
 use anyhow::anyhow;
 use anyhow::Result;
 use rig::log::debug;
+use std::time::Duration;
 use std::{io::Read, str::FromStr};
-use ureq::json;
+use ureq::{json, Agent, AgentBuilder};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct JsonResponse<T> {
@@ -267,7 +268,11 @@ pub fn get_blobs_from_beacon_chain(
 }
 
 fn send(endpoint: &str, body: serde_json::Value) -> Result<String> {
-    let response = ureq::post(endpoint)
+    let agent: Agent = AgentBuilder::new()
+        .timeout(Duration::from_secs(600)) // total request timeout
+        .build();
+    let response = agent
+        .post(endpoint)
         .set("Content-Type", "application/json")
         .send_json(body)?;
 

@@ -122,7 +122,11 @@ pub fn run_and_get_effective_cycles<const ROM_BOUND_SECOND_WORD_BITS: usize>(
         RamWithRomRegion::<ROM_BOUND_SECOND_WORD_BITS>::from_rom_content(&binary, 1 << 30);
     let period = 1 << 20;
     let num_snapshots = cycles.div_ceil(period);
-    let cycles_bound = period * num_snapshots;
+    let mut cycles_bound = period * num_snapshots;
+
+    if cycles_bound > (1 << 31) {
+        cycles_bound = 1 << 31;
+    }
 
     let mut state = State::initial_with_counters(CountersT::default());
 
