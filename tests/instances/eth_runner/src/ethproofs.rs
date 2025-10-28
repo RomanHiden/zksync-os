@@ -1,32 +1,13 @@
-use crate::block::Block;
-use crate::block_hashes::BlockHashes;
-use crate::calltrace::CallTrace;
-use crate::dump_utils::AccountStateDiffs;
 use crate::live_run::rpc::{self, EthProofPayload};
-use crate::native_model::compute_ratio;
-use crate::post_check::{post_check, post_check_ext};
-use crate::prestate::{populate_prestate, DiffTrace, PrestateTrace};
-use crate::receipts::{BlockReceipts, TransactionReceipt};
 use alloy::consensus::Header;
-use alloy::eips::eip4844::BlobTransactionSidecarItem;
-use alloy_primitives::Address;
 use alloy_primitives::U256;
 use alloy_rlp::Encodable;
-use alloy_rpc_types_eth::Withdrawal;
 use anyhow::Context;
 use anyhow::Ok;
-use anyhow::Result;
-use base64::Engine;
-use bincode::config::standard;
-use cli_lib::prover_utils::{
-    create_proofs_internal, create_recursion_proofs_with_machine, GpuSharedState, MainCircuitType,
-};
-use execution_utils::{Machine, ProgramProof, RecursionStrategy};
-use forward_system::run::output::map_tx_results;
+
 use rig::log::info;
 use rig::*;
-use std::fs::{self, File};
-use std::io::BufReader;
+
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -157,14 +138,37 @@ pub fn ethproofs_live_run(reth_endpoint: &str) -> anyhow::Result<()> {
     }
 }
 
+#[cfg(not(feature = "with_gpu_prover"))]
+pub fn ethproofs_with_proofs(
+    _reth_endpoint: &str,
+    _connector: EthProofsConnector,
+) -> anyhow::Result<()> {
+    panic!("Ethproofs with proofs requires the 'with_gpu_prover' feature to be enabled");
+}
+
+#[cfg(feature = "with_gpu_prover")]
 pub fn ethproofs_with_proofs(
     reth_endpoint: &str,
-    bin_path: String,
     connector: EthProofsConnector,
 ) -> anyhow::Result<()> {
-    let binary = cli_lib::prover_utils::load_binary_from_path(&bin_path);
+    use base64::Engine;
+    use bincode::config::standard;
+
+    use cli_lib::prover_utils::{
+        create_proofs_internal, create_recursion_proofs, GpuSharedState, Machine, MainCircuitType,
+        ProgramProof, RecursionStrategy,
+    };
+    use rig::chain::get_zksync_os_img_path;
+    // For now, we just use the 'default' app.bin from zksync-os dir.
+    let bin_path = get_zksync_os_img_path(&None);
+
+    let binary = cli_lib::prover_utils::load_binary_from_path(
+        &bin_path.into_os_string().into_string().unwrap(),
+    );
+
     let num_instances = 500;
     let recursion_circuit_type = MainCircuitType::ReducedRiscVLog23Machine;
+
     let mut gpu_state = Some(GpuSharedState::new(&binary, recursion_circuit_type));
 
     let mut gpu_state = gpu_state.as_mut();
@@ -193,21 +197,20 @@ pub fn ethproofs_with_proofs(
                 &mut gpu_state,
                 &mut total_proof_time,
             );
+
             // approx number of cycles.
             let cycles = proof_list.basic_proofs.len() * (1 << 22);
 
-            let recursion_mode = RecursionStrategy::UseReducedLog23Machine;
+            let recursion_mode = RecursionStrategy::UseReducedLog23MachineInBothLayers;
 
-            let (recursion_proof_list, recursion_proof_metadata) =
-                create_recursion_proofs_with_machine(
-                    proof_list,
-                    proof_metadata,
-                    recursion_mode,
-                    &None,
-                    &Machine::ReducedLog23,
-                    &mut gpu_state,
-                    &mut total_proof_time,
-                );
+            let (recursion_proof_list, recursion_proof_metadata) = create_recursion_proofs(
+                proof_list,
+                proof_metadata,
+                recursion_mode,
+                &None,
+                &mut gpu_state,
+                &mut total_proof_time,
+            );
             let program_proof = ProgramProof::from_proof_list_and_metadata(
                 &recursion_proof_list,
                 &recursion_proof_metadata,

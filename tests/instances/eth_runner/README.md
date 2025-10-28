@@ -42,3 +42,17 @@ This command will fetch blocks in the range [19299000, 19299005] from the Ethere
 ### Prover input generation
 
 Both subcommands have an optional parameter `--witness-output-dir` that expects a directory to dump the witness for the block
+
+## Running & submitting to eth proofs
+
+Build the app.bin with pectra:
+
+```shell
+./dump_bin.sh --type pectra
+```
+
+And then run the eth_runner
+
+```shell
+RUST_MIN_STACK=267108864 RUSTFLAGS="-Awarnings" cargo run -p eth_runner --release --features rig/no_print,rig/unlimited_native,with_gpu_prover -- ethproofs-with-proofs  --reth-endpoint RETH_ENDPOINT --bin-path zksync_os/app.bin --staging --auth-token AUTH_TOKEN --cluster-id CLUSTER_ID
+```

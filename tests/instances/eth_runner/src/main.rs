@@ -96,8 +96,6 @@ enum Command {
     EthproofsWithProofs {
         #[arg(long)]
         reth_endpoint: String,
-        #[arg(long)]
-        bin_path: String,
         // If staging is set, then proofs will be sent to staging server and we pick next available block.
         // If not set, then proofs will be sent to production server and we every 100th block.
         #[arg(long)]
@@ -157,13 +155,12 @@ fn main() -> anyhow::Result<()> {
         Command::EthproofsLiveRun { reth_endpoint } => ethproofs_live_run(&reth_endpoint),
         Command::EthproofsWithProofs {
             reth_endpoint,
-            bin_path,
             staging,
             auth_token,
             cluster_id,
         } => {
             let connector = EthProofsConnector::new(staging, auth_token, cluster_id);
-            ethproofs::ethproofs_with_proofs(&reth_endpoint, bin_path, connector)
+            ethproofs::ethproofs_with_proofs(&reth_endpoint, connector)
         }
     }
 }
