@@ -53,7 +53,7 @@ pub const G2_BY_TAU_POINT:
         infinity: false,
     };
 
-#[cfg(all(any(target_arch = "riscv32", feature = "proving"),all(feature = "proving", fuzzing)))]
+#[cfg(any(all(target_arch = "riscv32", feature = "proving"),all(feature = "proving", fuzzing)))]
 pub const G2_BY_TAU_POINT:
     <crypto::bls12_381::curves::Bls12_381 as crypto::ark_ec::pairing::Pairing>::G2Affine =
     crypto::bls12_381::curves::g2::G2Affine {
@@ -5237,7 +5237,7 @@ pub const PREPARED_G2_GENERATOR:
 // QuasiUART::new().write_fmt(format_args!("    ],\n")).unwrap();
 // QuasiUART::new().write_fmt(format_args!("    infinity: {:?},\n", prepared_g2_generator.infinity)).unwrap();
 // QuasiUART::new().write_fmt(format_args!("}};\n")).unwrap();
-#[cfg(all(any(target_arch = "riscv32", feature = "proving"),all(feature = "proving", fuzzing)))]
+#[cfg(any(all(target_arch = "riscv32", feature = "proving"),all(feature = "proving", fuzzing)))]
 pub const PREPARED_G2_GENERATOR:
     <crypto::bls12_381::curves::Bls12_381 as crypto::ark_ec::pairing::Pairing>::G2Prepared =
     crypto::bls12_381::curves::G2PreparedNoAlloc {
