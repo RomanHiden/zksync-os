@@ -642,6 +642,76 @@ fn test_independent_txs_have_same_pubdata() {
     assert_eq!(pubdata_used_1, pubdata_used_2, "Pubdata used not equal")
 }
 
+#[test]
+fn test_invalid_tx_does_not_bump_tx_counter() {
+    let wallet = PrivateKeySigner::from_str(
+        "dcf2cbdd171a21c480aa7f53d77f31bb102282b3ff099c78e3118b37348c72f7",
+    )
+    .unwrap();
+    let wallet_ethers = LocalWallet::from_bytes(wallet.to_bytes().as_slice()).unwrap();
+    let from = wallet_ethers.address();
+    let to = address!("0000000000000000000000000000000000010002");
+    let bytecode = hex::decode(ERC_20_BYTECODE).unwrap();
+
+    // Invalid tx first
+    let encoded_mint1_tx = {
+        let mint_tx = TxLegacy {
+            chain_id: 37u64.into(),
+            nonce: 0,
+            gas_price: 1000,
+            gas_limit: 34_158_000_000_000,
+            to: TxKind::Call(to),
+            value: Default::default(),
+            input: hex::decode(ERC_20_MINT_CALLDATA).unwrap().into(),
+        };
+        rig::utils::sign_and_encode_alloy_tx(mint_tx, &wallet)
+    };
+    let withdrawal_tx = {
+        let to = address!("000000000000000000000000000000000000800a");
+
+        let withdrawal_calldata =
+            hex::decode("51cff8d9000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                .unwrap();
+
+        let mint_tx = TxLegacy {
+            chain_id: 37u64.into(),
+            nonce: 0,
+            gas_price: 1000,
+            gas_limit: 500_000,
+            to: TxKind::Call(to),
+            value: U256::from(10),
+            input: withdrawal_calldata.into(),
+        };
+        rig::utils::sign_and_encode_alloy_tx(mint_tx, &wallet)
+    };
+
+    let mut chain = Chain::empty(None);
+    let transactions = vec![encoded_mint1_tx, withdrawal_tx];
+    chain.set_evm_bytecode(B160::from_be_bytes(to.into_array()), &bytecode);
+    chain.set_balance(
+        B160::from_be_bytes(from.0),
+        U256::from(1_000_000_000_000_000_u64),
+    );
+    let output = chain.run_block(transactions, None, None);
+
+    // Assert tx succeeded/failed
+    let result0 = output.tx_results.first().unwrap().clone();
+    let result1 = output.tx_results.get(1).unwrap().clone();
+
+    assert!(result0.as_ref().is_err());
+    assert!(result1.as_ref().is_ok_and(|o| o.is_success()));
+    assert!(
+        result1
+            .unwrap()
+            .l2_to_l1_logs
+            .first()
+            .unwrap()
+            .log
+            .tx_number_in_block
+            == 0
+    );
+}
+
 // TODO: find better place for regression tests
 #[test]
 fn test_regression_returndata_empty_3541() {
