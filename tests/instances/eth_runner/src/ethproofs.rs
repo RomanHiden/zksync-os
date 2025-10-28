@@ -136,7 +136,7 @@ pub fn ethproofs_run(
     Ok((witness, duration.as_secs_f64()))
 }
 
-const POLL_INTERVAL: Duration = Duration::from_secs(5);
+const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const CONFIRMATIONS: u64 = 2;
 
 pub fn ethproofs_live_run(reth_endpoint: &str) -> anyhow::Result<()> {
