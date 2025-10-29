@@ -76,3 +76,6 @@ blake2s_tests = []
 secp256k1-static-context = []
 alloc = []
 testing = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }

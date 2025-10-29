@@ -19,7 +19,7 @@ struct Input {
     kind1: PointKind,
     kind2: PointKind,
 
-    // Scalars for contructing valid points
+    // Scalars for constructing valid points
     s1_bytes: [u8; 32],
     s2_bytes: [u8; 32],
 

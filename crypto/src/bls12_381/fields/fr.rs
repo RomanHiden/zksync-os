@@ -7,7 +7,11 @@ use crate::ark_ff_delegation::{BigInt, BigIntMacro, Fp, Fp256, MontBackend, Mont
 use crate::bigint_delegation::{u256, DelegatedModParams, DelegatedMontParams};
 use ark_ff::{AdditiveGroup, Zero};
 
-#[cfg(any(all(target_arch = "riscv32", feature = "bigint_ops"), test, all(feature = "proving", fuzzing)))]
+#[cfg(any(
+    all(target_arch = "riscv32", feature = "bigint_ops"),
+    test,
+    all(feature = "proving", fuzzing)
+))]
 pub fn init() {
     unsafe {
         MODULUS.as_mut_ptr().write(FrConfig::MODULUS);

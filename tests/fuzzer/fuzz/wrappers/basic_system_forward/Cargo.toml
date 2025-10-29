@@ -63,3 +63,6 @@ alloy-primitives = { version = "1", features = ["arbitrary"] }
 reqwest = { version = "*", features = ["blocking", "json"] }
 reth-trie-common = { git = "https://github.com/paradigmxyz/reth.git" }
 reth-trie-sparse = { git = "https://github.com/paradigmxyz/reth.git" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }

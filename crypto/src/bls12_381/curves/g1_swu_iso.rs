@@ -1,5 +1,9 @@
 use super::super::{g1, Fq, Fr};
-#[cfg(any(all(target_arch = "riscv32", feature = "bigint_ops"), test, all(feature = "proving", fuzzing)))]
+#[cfg(any(
+    all(target_arch = "riscv32", feature = "bigint_ops"),
+    test,
+    all(feature = "proving", fuzzing)
+))]
 use crate::ark_ff_delegation::MontFp;
 use ark_ec::{
     hashing::curve_maps::{swu::SWUConfig, wb::IsogenyMap},
@@ -8,7 +12,11 @@ use ark_ec::{
         CurveConfig,
     },
 };
-#[cfg(not(any(all(target_arch = "riscv32", feature = "bigint_ops"), test, all(feature = "proving", fuzzing))))]
+#[cfg(not(any(
+    all(target_arch = "riscv32", feature = "bigint_ops"),
+    test,
+    all(feature = "proving", fuzzing)
+)))]
 use ark_ff::MontFp;
 
 type G1Affine = Affine<SwuIsoConfig>;
