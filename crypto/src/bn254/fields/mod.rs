@@ -5,12 +5,8 @@
 ))]
 mod fq;
 
-#[cfg(any(
-    all(target_arch = "riscv32", feature = "bigint_ops"),
-    test,
-    all(feature = "proving", fuzzing)
-))]
-pub use self::fq::{init, Fq};
+#[cfg(any(all(target_arch = "riscv32", feature = "bigint_ops"), test))]
+pub use self::fq::Fq;
 
 #[cfg(not(any(
     all(target_arch = "riscv32", feature = "bigint_ops"),

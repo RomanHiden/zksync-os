@@ -34,12 +34,6 @@ mod mod_inv64;
     all(feature = "proving", fuzzing)
 ))]
 mod field_8x32;
-#[cfg(any(
-    all(target_arch = "riscv32", feature = "bigint_ops"),
-    test,
-    all(feature = "proving", fuzzing)
-))]
-pub use field_8x32::init;
 
 #[cfg(all(debug_assertions, not(feature = "bigint_ops")))]
 mod field_impl;

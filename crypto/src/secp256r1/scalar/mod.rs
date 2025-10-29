@@ -25,13 +25,6 @@ cfg_if::cfg_if! {
 
 }
 
-#[cfg(any(
-    all(target_arch = "riscv32", feature = "bigint_ops"),
-    test,
-    all(feature = "proving", fuzzing)
-))]
-pub(super) use scalar_delegation::init;
-
 use super::{wnaf::ToWnaf, Secp256r1Err};
 
 // Curve order
