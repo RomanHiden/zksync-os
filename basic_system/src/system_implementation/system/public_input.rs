@@ -1,3 +1,6 @@
+use crate::system_implementation::system::da_commitment_generator::{
+    DACommitmentGenerator, Keccak256CommitmentGenerator,
+};
 use crate::system_implementation::system::public_input;
 use arrayvec::ArrayVec;
 use crypto::sha3::Keccak256;
@@ -201,22 +204,22 @@ impl BatchPublicInput {
 ///
 /// Batch PI builder, it allows to apply blocks info on by one to persist data needed for the batch PI and at the end create it.
 ///
-pub struct BatchPublicInputBuilder {
+pub struct BatchPublicInputBuilder<A: alloc::alloc::Allocator> {
     is_first_block: bool,
     initial_state_commitment: Option<Bytes32>,
     current_state_commitment: Option<Bytes32>,
     first_block_timestamp: Option<u64>,
     current_block_timestamp: Option<u64>,
     chain_id: Option<U256>,
-    pub pubdata_hasher: Keccak256,
+    pub da_commitment_generator: alloc::boxed::Box<dyn DACommitmentGenerator, A>,
     pub logs_storage: ArrayVec<Bytes32, 16384>,
     pub number_of_layer_1_txs: U256,
     pub l1_txs_rolling_hash: Bytes32,
     upgrade_tx_hash: Option<Bytes32>,
 }
 
-impl BatchPublicInputBuilder {
-    pub fn new() -> Self {
+impl<A: alloc::alloc::Allocator> BatchPublicInputBuilder<A> {
+    pub fn new_in(alloc: A) -> Self {
         Self {
             is_first_block: true,
             initial_state_commitment: None,
@@ -224,7 +227,10 @@ impl BatchPublicInputBuilder {
             first_block_timestamp: None,
             current_block_timestamp: None,
             chain_id: None,
-            pubdata_hasher: Keccak256::new(),
+            da_commitment_generator: alloc::boxed::Box::new_in(
+                Keccak256CommitmentGenerator::new(),
+                alloc,
+            ),
             logs_storage: ArrayVec::new(),
             number_of_layer_1_txs: U256::ZERO,
             // keccak256([])
@@ -272,7 +278,7 @@ impl BatchPublicInputBuilder {
     ///
     /// Create public input for a batch that contains previously added blocks.
     ///
-    pub fn into_public_input(self, mut logger: impl Logger) -> BatchPublicInput {
+    pub fn into_public_input(mut self, mut logger: impl Logger) -> BatchPublicInput {
         assert!(!self.is_first_block);
 
         let mut full_root_hasher = crypto::sha3::Keccak256::new();
@@ -280,19 +286,12 @@ impl BatchPublicInputBuilder {
         full_root_hasher.update([0u8; 32]); // aggregated root 0 for now
         let full_l2_to_l1_logs_root = full_root_hasher.finalize();
 
-        let mut da_commitment_hasher = crypto::sha3::Keccak256::new();
-        da_commitment_hasher.update([0u8; 32]); // we don't have to validate state diffs hash
-        da_commitment_hasher.update(self.pubdata_hasher.finalize().as_slice()); // full pubdata keccak
-        da_commitment_hasher.update([1u8]); // with calldata we should provide 1 blob
-        da_commitment_hasher.update([0u8; 32]); // its hash will be ignored on the settlement layer
-        let da_commitment = da_commitment_hasher.finalize();
-
         let batch_output = public_input::BatchOutput {
             chain_id: self.chain_id.unwrap(),
             first_block_timestamp: self.first_block_timestamp.unwrap(),
             last_block_timestamp: self.current_block_timestamp.unwrap(),
             used_l2_da_validator_address: ruint::aliases::B160::ZERO,
-            pubdata_commitment: da_commitment.into(),
+            pubdata_commitment: self.da_commitment_generator.finalize(),
             number_of_layer_1_txs: self.number_of_layer_1_txs,
             priority_operations_hash: self.l1_txs_rolling_hash,
             l2_logs_tree_root: full_l2_to_l1_logs_root.into(),
