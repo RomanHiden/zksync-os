@@ -56,10 +56,7 @@ pub const G2_BY_TAU_POINT:
         infinity: false,
     };
 
-#[cfg(any(
-    all(target_arch = "riscv32", feature = "proving"),
-    all(feature = "proving", fuzzing)
-))]
+#[cfg(all(feature = "proving", any(target_arch = "riscv32", fuzzing)))]
 pub const G2_BY_TAU_POINT:
     <crypto::bls12_381::curves::Bls12_381 as crypto::ark_ec::pairing::Pairing>::G2Affine =
     crypto::bls12_381::curves::g2::G2Affine {
