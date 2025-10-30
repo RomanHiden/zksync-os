@@ -90,6 +90,64 @@ impl<
         }
     }
 
+    fn charge_ergs_for_cold_access(
+        ee_type: ExecutionEnvironmentType,
+        resources: &mut R,
+        address: &B160,
+        is_selfdestruct: bool,
+    ) -> Result<(), SystemError> {
+        match ee_type {
+            ExecutionEnvironmentType::NoEE => {}
+            ExecutionEnvironmentType::EVM => {
+                let cost: R = if evm_interpreter::utils::is_precompile(&address) {
+                    R::empty() // We've charged the access already.
+                } else {
+                    let mut cost = R::from_ergs(COLD_PROPERTIES_ACCESS_EXTRA_COST_ERGS);
+                    if is_selfdestruct {
+                        // Selfdestruct doesn't charge for warm, but it
+                        // includes the warm cost for cold access
+                        cost.add_ergs(WARM_PROPERTIES_ACCESS_COST_ERGS)
+                    }
+                    cost
+                };
+
+                resources.charge(&cost)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn charge_native_for_cold_access(
+        ee_type: ExecutionEnvironmentType,
+        resources: &mut R,
+        empty_account: bool,
+        policy: &P,
+    ) -> Result<(), SystemError> {
+        // We charge for 2 things:
+        // 1. Performing the special access for account properties
+        // 2. Decommitting the account properties
+
+        // 1. Charging for special access
+        resources.with_infinite_ergs(|res: &mut R| {
+            // Access list only matters for ergs, we set it to false
+            policy.charge_warm_storage_read(ee_type, res, false)
+        })?;
+        resources.with_infinite_ergs(|res| {
+            // We determine if it's a new slot by proxy of empty_account.
+            policy.charge_cold_storage_read_extra(ee_type, res, empty_account)
+        })?;
+
+        // 2. Charging the decommitment (only when account isn't empty)
+        if !empty_account {
+            BytecodeAndAccountDataPreimagesStorage::<R, A>::charge_decommitment_native_cost(
+                resources,
+                AccountProperties::ENCODED_SIZE,
+            )?;
+        }
+
+        Ok(())
+    }
+
     /// Read element and initialize it if needed
     fn materialize_element<const PROOF_ENV: bool>(
         &mut self,
@@ -133,36 +191,30 @@ impl<
                 initialized_element = true;
 
                 // - first get a hash of properties from storage
-                match ee_type {
-                    ExecutionEnvironmentType::NoEE => {}
-                    ExecutionEnvironmentType::EVM => {
-                        let cost: R = if evm_interpreter::utils::is_precompile(&address) {
-                            R::empty() // We've charged the access already.
-                        } else {
-                            let mut cost = R::from_ergs(COLD_PROPERTIES_ACCESS_EXTRA_COST_ERGS);
-                            if is_selfdestruct {
-                                // Selfdestruct doesn't charge for warm, but it
-                                // includes the warm cost for cold access
-                                cost.add_ergs(WARM_PROPERTIES_ACCESS_COST_ERGS)
-                            }
-                            cost
-                        };
+                Self::charge_ergs_for_cold_access(ee_type, resources, address, is_selfdestruct)?;
 
-                        resources.charge(&cost)?;
-                    }
-                }
+                // We use infinite resources to perform IO. This costs are charged
+                // every time we charge for "cold" access, to avoid native charging
+                // depending on the state of caches.
+                let mut inf_resources = R::FORMAL_INFINITE;
 
                 // to avoid divergence we read as-if infinite ergs
-                let hash = resources.with_infinite_ergs(|inf_resources| {
-                    storage.read_special_account_property::<AccountAggregateDataHash>(
-                        ExecutionEnvironmentType::NoEE,
-                        inf_resources,
-                        address,
-                        oracle,
-                    )
-                })?;
+                let hash = storage.read_special_account_property::<AccountAggregateDataHash>(
+                    ExecutionEnvironmentType::NoEE,
+                    &mut inf_resources,
+                    address,
+                    oracle,
+                )?;
 
-                let acc_data = match hash == Bytes32::ZERO {
+                let empty_account = hash == Bytes32::ZERO;
+                Self::charge_native_for_cold_access(
+                    ee_type,
+                    resources,
+                    empty_account,
+                    &storage.0.resources_policy,
+                )?;
+
+                let acc_data = match empty_account {
                     true => (AccountProperties::default(), Appearance::Unset),
                     false => {
                         let preimage = preimages_cache.get_preimage::<PROOF_ENV>(
@@ -173,7 +225,7 @@ impl<
                                     as u32,
                                 preimage_type: PreimageType::AccountData,
                             },
-                            resources,
+                            &mut inf_resources,
                             oracle,
                         )?;
                         // it's redundant as preimages cache should just check it, but why not
@@ -198,25 +250,19 @@ impl<
                 if is_warm == false {
                     if initialized_element == false {
                         // Element exists in cache, but wasn't touched in current tx yet
-                        match ee_type {
-                            ExecutionEnvironmentType::NoEE => {}
-                            ExecutionEnvironmentType::EVM => {
-                                let cost: R = if evm_interpreter::utils::is_precompile(&address) {
-                                    R::empty() // We've charged the access already.
-                                } else {
-                                    let mut cost =
-                                        R::from_ergs(COLD_PROPERTIES_ACCESS_EXTRA_COST_ERGS);
-                                    if is_selfdestruct {
-                                        // Selfdestruct doesn't charge for warm, but it
-                                        // includes the warm cost for cold access
-                                        cost.add_ergs(WARM_PROPERTIES_ACCESS_COST_ERGS)
-                                    };
-                                    cost
-                                };
-
-                                resources.charge(&cost)?;
-                            }
-                        }
+                        Self::charge_ergs_for_cold_access(
+                            ee_type,
+                            resources,
+                            address,
+                            is_selfdestruct,
+                        )?;
+                        let empty_account = x.current().appearance() == Appearance::Unset;
+                        Self::charge_native_for_cold_access(
+                            ee_type,
+                            resources,
+                            empty_account,
+                            &storage.0.resources_policy,
+                        )?;
                     }
 
                     x.update(|cache_record| {
