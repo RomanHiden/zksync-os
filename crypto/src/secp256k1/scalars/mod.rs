@@ -11,7 +11,11 @@ mod scalar64;
 #[cfg(all(target_pointer_width = "32", not(feature = "bigint_ops")))]
 mod scalar32;
 
-#[cfg(any(all(target_arch = "riscv32", feature = "bigint_ops"), test))]
+#[cfg(any(
+    all(target_arch = "riscv32", feature = "bigint_ops"),
+    test,
+    all(feature = "proving", fuzzing)
+))]
 pub(crate) mod scalar32_delegation;
 
 cfg_if! {

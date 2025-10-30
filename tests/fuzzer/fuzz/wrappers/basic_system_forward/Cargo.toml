@@ -1,24 +1,28 @@
 [package]
-name = "basic_system"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-homepage.workspace = true
-repository.workspace = true
-license.workspace = true
-keywords.workspace = true
-categories.workspace = true
+name = "basic_system_forward"
+resolver = "2"
+version = "0.1.0"
+edition = "2021"
+authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
+homepage = "https://zksync.io/"
+repository = "https://github.com/matter-labs/zksync-os/"
+license = "MIT OR Apache-2.0"
+keywords = ["blockchain", "zksync", "zk", "risc-v"]
+categories = ["cryptography"]
+
+[lib]
+path = "../../../../../basic_system/src/lib.rs"
 
 [dependencies]
-zk_ee = { path = "../zk_ee", default-features = false }
-evm_interpreter = { path = "../evm_interpreter"  }
+zk_ee = { package = "zk_ee_forward", path = "../zk_ee_forward", default-features = false }
+evm_interpreter = { package = "evm_interpreter_forward", path = "../evm_interpreter_forward"  }
 ruint = { version = "1.12.3", default-features = false, features = ["alloc"] }
-crypto = { path = "../crypto", default-features = false, features = ["secp256k1-static-context"]}
+crypto = { package = "crypto_forward", path = "../crypto_forward", default-features = false, features = ["secp256k1-static-context"]}
 arrayvec = { version = "0.7.4", default-features = false }
 either = { version = "*", default-features = false }
-storage_models = { path = "../storage_models", default-features = false }
-modexp = { path = "../supporting_crates/modexp" }
-cycle_marker = { path = "../cycle_marker" }
+storage_models = { package = "storage_models_forward", path = "../storage_models_forward", default-features = false }
+modexp = { path = "../../../../../supporting_crates/modexp" }
+cycle_marker = { path = "../../../../../cycle_marker" }
 num-bigint = { version =  "*", optional = true}
 num-traits = { version =  "*", optional = true}
 
@@ -33,19 +37,21 @@ paste = "1.0.15"
 
 [features]
 testing = ["zk_ee/testing", "evm_interpreter/testing", "serde", "ruint/serde", "rand", "crypto/testing", "num-bigint", "num-traits"]
+evm-compatibility = []
 default = ["testing"]
 cycle_marker = ["cycle_marker/log_to_file"]
+wrap-in-batch = []
 proving = ["crypto/proving"]
-# The finish method will just return inputs, so outputs can be processed outside bootloader
+evm_refunds = ["storage_models/evm_refunds"]
+# The finish method will just return inputs, so outputs can be procesed outside bootloader
 # Used for proving multi block batch within 1 run
 multiblock-batch = []
 state-diffs-pi = []
-aggregation = []
 
 [dev-dependencies]
 hex = {version = "0.4.3"}
 proptest = "1.6.0"
-crypto = { path = "../crypto", default-features = false, features = ["secp256k1-static-context", "testing"]}
+crypto = { package = "crypto_forward", path = "../crypto_forward", default-features = false, features = ["secp256k1-static-context", "testing"]}
 num-bigint = "*"
 num-traits = "*"
 arbitrary = { version = "1", features = ["derive"] }
