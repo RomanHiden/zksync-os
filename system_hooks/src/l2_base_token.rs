@@ -138,16 +138,18 @@ fn l2_base_token_hook_inner<S: EthereumLikeTypes>(
     resources: &mut S::Resources,
     system: &mut System<S>,
     caller: B160,
-    caller_ee: u8,
+    _caller_ee: u8,
     nominal_token_value: U256,
     is_static: bool,
 ) -> Result<Result<&'static [u8], &'static str>, SystemError>
 where
     S::IO: IOSubsystemExt,
 {
-    // TODO: charge native
-    let step_cost: S::Resources = S::Resources::from_ergs(Ergs(10));
-    resources.charge(&step_cost)?;
+    evm_interpreter::charge_native_and_ergs::<S::Resources>(
+        resources,
+        HOOK_BASE_NATIVE_COST,
+        HOOK_BASE_ERGS_COST,
+    )?;
 
     if calldata.len() < 4 {
         return Ok(Err(
@@ -174,7 +176,6 @@ where
             resources,
             system,
             caller,
-            caller_ee,
             nominal_token_value,
             is_static,
         ),
@@ -184,7 +185,6 @@ where
             resources,
             system,
             caller,
-            caller_ee,
             nominal_token_value,
             is_static,
         ),
@@ -201,7 +201,6 @@ fn withdraw<S: EthereumLikeTypes>(
     resources: &mut S::Resources,
     system: &mut System<S>,
     caller: B160,
-    caller_ee: u8,
     nominal_token_value: U256,
     is_static: bool,
 ) -> Result<Result<&'static [u8], &'static str>, SystemError>
@@ -220,7 +219,7 @@ where
         ));
     }
 
-    burn_nominal_token_value(resources, system, caller_ee, &nominal_token_value)?;
+    burn_nominal_token_value(resources, system, &nominal_token_value)?;
 
     // Sending L2->L1 message.
     // ABI-encoded messages should consist of the following:
@@ -255,7 +254,6 @@ where
         resources,
         system,
         L2_BASE_TOKEN_ADDRESS,
-        caller_ee,
     )?;
 
     // event Withdrawal(address indexed _l2Sender, address indexed _l1Receiver, uint256 _amount);
@@ -266,8 +264,8 @@ where
     topics.push(Bytes32::from_u256_be(&U256::from_be_slice(&l1_receiver))); // _l1Receiver
 
     system.io.emit_event(
-        ExecutionEnvironmentType::parse_ee_version_byte(caller_ee)
-            .map_err(SystemError::LeafDefect)?,
+        // Use EVM EE to charge for gas too
+        ExecutionEnvironmentType::EVM,
         resources,
         &L2_BASE_TOKEN_ADDRESS,
         &topics,
@@ -286,7 +284,6 @@ fn withdraw_with_message<S: EthereumLikeTypes>(
     resources: &mut S::Resources,
     system: &mut System<S>,
     caller: B160,
-    caller_ee: u8,
     nominal_token_value: U256,
     is_static: bool,
 ) -> Result<Result<&'static [u8], &'static str>, SystemError>
@@ -362,7 +359,7 @@ where
         ));
     }
 
-    burn_nominal_token_value(resources, system, caller_ee, &nominal_token_value)?;
+    burn_nominal_token_value(resources, system, &nominal_token_value)?;
 
     // Sending L2->L1 message.
     // ABI-encoded messages should consist of the following:
@@ -383,6 +380,18 @@ where
     } else {
         abi_encoded_message_length
     };
+
+    // First we charge for copying the message
+    let native_copy_cost = evm_interpreter::native_resource_constants::COPY_BASE_NATIVE_COST
+        .saturating_add(
+            evm_interpreter::native_resource_constants::COPY_BYTE_NATIVE_COST
+                .saturating_mul(abi_encoded_message_length as u64),
+        );
+    let to_charge = S::Resources::from_native(
+        <S::Resources as Resources>::Native::from_computational(native_copy_cost),
+    );
+    resources.charge(&to_charge)?;
+
     let mut message: alloc::vec::Vec<u8, S::Allocator> = alloc::vec::Vec::with_capacity_in(
         abi_encoded_message_length as usize + 32,
         system.get_allocator(),
@@ -403,13 +412,7 @@ where
         abi_encoded_message_length as usize - message.len(),
     ));
 
-    let result = send_to_l1_inner(
-        &message,
-        resources,
-        system,
-        L2_BASE_TOKEN_ADDRESS,
-        caller_ee,
-    )?;
+    let result = send_to_l1_inner(&message, resources, system, L2_BASE_TOKEN_ADDRESS)?;
 
     /*
         event WithdrawalWithMessage(
@@ -432,6 +435,18 @@ where
     } else {
         abi_encoded_event_length
     };
+
+    // Now we charge for copying the event data
+    let native_copy_cost = evm_interpreter::native_resource_constants::COPY_BASE_NATIVE_COST
+        .saturating_add(
+            evm_interpreter::native_resource_constants::COPY_BYTE_NATIVE_COST
+                .saturating_mul(abi_encoded_event_length as u64),
+        );
+    let to_charge = S::Resources::from_native(
+        <S::Resources as Resources>::Native::from_computational(native_copy_cost),
+    );
+    resources.charge(&to_charge)?;
+
     let mut event_data =
         alloc::vec::Vec::with_capacity_in(abi_encoded_event_length + 32, system.get_allocator());
     event_data.extend_from_slice(&nominal_token_value.to_be_bytes::<32>());
@@ -446,8 +461,8 @@ where
     ));
 
     system.io.emit_event(
-        ExecutionEnvironmentType::parse_ee_version_byte(caller_ee)
-            .map_err(SystemError::LeafDefect)?,
+        // Use EVM EE to charge for gas too
+        ExecutionEnvironmentType::EVM,
         resources,
         &L2_BASE_TOKEN_ADDRESS,
         &topics,
@@ -461,15 +476,14 @@ where
 fn burn_nominal_token_value<S: EthereumLikeTypes>(
     resources: &mut S::Resources,
     system: &mut System<S>,
-    caller_ee: u8,
     nominal_token_value: &U256,
 ) -> Result<(), SystemError>
 where
     S::IO: IOSubsystemExt,
 {
     match system.io.update_account_nominal_token_balance(
-        ExecutionEnvironmentType::parse_ee_version_byte(caller_ee)
-            .map_err(SystemError::LeafDefect)?,
+        // Use EVM EE to charge for gas too
+        ExecutionEnvironmentType::EVM,
         resources,
         &L2_BASE_TOKEN_ADDRESS,
         &nominal_token_value,

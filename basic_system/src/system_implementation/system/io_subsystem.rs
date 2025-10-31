@@ -206,12 +206,11 @@ impl<
                 + keccak256_native_cost::<Self::Resources>(data.len()).as_u64();
 
         // We also charge some native resource for storing the log
-        let native = R::Native::from_computational(
-            hashing_native_cost
-                + EVENT_STORAGE_BASE_NATIVE_COST
-                + EVENT_DATA_PER_BYTE_COST * (data.len() as u64),
-        );
-        resources.charge(&R::from_native(native))?;
+        let native = hashing_native_cost
+            + EVENT_STORAGE_BASE_NATIVE_COST
+            + EVENT_DATA_PER_BYTE_COST * (data.len() as u64);
+
+        resources.charge(&R::from_native(R::Native::from_computational(native)))?;
 
         // TODO(EVM-1078): for Era backward compatibility we may need to add events for l2 to l1 log and l1 message
 
