@@ -1,6 +1,7 @@
 use crate::run::{NextTxResponse, PreimageSource, ReadStorageTree, TxSource};
 use basic_system::system_implementation::flat_storage_model::*;
 use serde::{Deserialize, Serialize};
+use zksync_os_interface::traits::EncodedTx;
 use zk_ee::common_structs::derive_flat_storage_key;
 use zk_ee::common_structs::ProofData;
 use zk_ee::internal_error;
@@ -56,7 +57,11 @@ impl<T: ReadStorageTree, PS: PreimageSource, TS: TxSource> ForwardRunningOracle<
                                 let next_tx_len = next_tx.len();
                                 // `0` interpreted as seal batch
                                 assert_ne!(next_tx_len, 0);
-                                self.next_tx = Some(next_tx);
+                                let abi_tx = match next_tx {
+                                    EncodedTx::Abi(b) => b,
+                                    _ => panic!("only ABI-encoded transactions are supported"),
+                                };
+                                self.next_tx = Some(abi_tx);
                                 next_tx_len
                             }
                         }
@@ -228,7 +233,11 @@ impl<S: ReadStorage, PS: PreimageSource, TS: TxSource> CallSimulationOracle<S, P
                                 let next_tx_len = next_tx.len();
                                 // `0` interpreted as seal batch
                                 assert_ne!(next_tx_len, 0);
-                                self.next_tx = Some(next_tx);
+                                let abi_tx = match next_tx {
+                                    EncodedTx::Abi(b) => b,
+                                    _ => panic!("only ABI-encoded transactions are supported"),
+                                };
+                                self.next_tx = Some(abi_tx);
                                 next_tx_len
                             }
                         }

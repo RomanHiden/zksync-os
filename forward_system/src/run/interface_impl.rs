@@ -5,9 +5,7 @@ use crate::run::tracing_impl::TracerWrapped;
 use crate::run::{run_block, simulate_tx};
 use zk_ee::system::metadata::BlockMetadataFromOracle;
 use zksync_os_interface::tracing::AnyTracer;
-use zksync_os_interface::traits::{
-    PreimageSource, ReadStorage, RunBlock, SimulateTx, TxResultCallback, TxSource,
-};
+use zksync_os_interface::traits::{EncodedTx, PreimageSource, ReadStorage, RunBlock, SimulateTx, TxResultCallback, TxSource};
 use zksync_os_interface::types::BlockContext;
 use zksync_os_interface::types::BlockOutput;
 
@@ -56,15 +54,19 @@ impl SimulateTx for RunBlockForward {
     fn simulate_tx<Storage: ReadStorage, PreimgSrc: PreimageSource, Tracer: AnyTracer>(
         &self,
         _config: (),
-        transaction: Vec<u8>,
+        transaction: EncodedTx,
         block_context: BlockContext,
         storage: Storage,
         preimage_source: PreimgSrc,
         tracer: &mut Tracer,
     ) -> Result<TxResult, Self::Error> {
         let evm_tracer = tracer.as_evm().expect("only EVM tracers are supported");
+        let abi_tx = match transaction {
+            EncodedTx::Abi(b) => b,
+            _ => panic!("only ABI-encoded transactions are supported"),
+        };
         simulate_tx(
-            transaction,
+            abi_tx,
             BlockMetadataFromOracle::from_interface(block_context),
             storage,
             preimage_source,
