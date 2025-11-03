@@ -1,8 +1,8 @@
 use super::snapshottable_io::SnapshottableIo;
-use crypto::MiniDigest;
 use zk_ee::execution_environment_type::ExecutionEnvironmentType;
 use zk_ee::oracle::IOOracle;
 use zk_ee::system::{BalanceSubsystemError, DeconstructionSubsystemError, NonceSubsystemError};
+use zk_ee::utils::write_bytes::WriteBytes;
 use zk_ee::utils::Bytes32;
 use zk_ee::{
     system::{
@@ -17,7 +17,7 @@ use zk_ee::{
 /// Storage model trait needed to allow using different storage models in the system.
 ///
 /// It defines methods to read/write contracts storage slots and account data,
-/// but all the details about underlying structure, commitment, pubdata compression are hidden behind this trait.
+/// but all the details about underlying structure, commitment, and pubdata compression are hidden behind this trait.
 ///
 pub trait StorageModel: Sized + SnapshottableIo {
     type IOTypes: SystemIOTypesConfig;
@@ -218,11 +218,11 @@ pub trait StorageModel: Sized + SnapshottableIo {
     fn pubdata_used_by_tx(&self) -> u32;
 
     /// Used for testing to compare state diffs between forwards and proving runs.
-    fn finish_and_calculate_state_diffs_hash(
+    fn finish_and_calculate_state_diffs_hash<T: WriteBytes + ?Sized>(
         self,
         oracle: &mut impl IOOracle,
         state_commitment: Option<&mut Self::StorageCommitment>,
-        pubdata_hasher: &mut impl MiniDigest,
+        pubdata_dst: &mut T,
         result_keeper: &mut impl IOResultKeeper<Self::IOTypes>,
         logger: &mut impl Logger,
     ) -> Result<Bytes32, InternalError>;
@@ -230,25 +230,23 @@ pub trait StorageModel: Sized + SnapshottableIo {
     ///
     /// Finish work, there are 3 outputs:
     /// - state changes: uncompressed state diffs(including new preimages), writes to `results_keeper`
-    /// - pubdata - compressed state diffs(including preimages) that should be posted on the DA layer, writes to `results_keeper` and `pubdata_hasher`.
+    /// - pubdata - compressed state diffs(including preimages) that should be posted on the DA layer, writes to `results_keeper` and `pubdata_dst`.
     /// - new state commitment: if `state_commitment` is `Some` - verifies all the reads, applies writes and updates state commitment
     ///
     // Currently, result_keeper accepts storage diffs and preimages.
     // However, future storage models may require different format, so we'll need to generalize it.
-    fn finish(
+    fn finish<T: WriteBytes + ?Sized>(
         self,
         oracle: &mut impl IOOracle, // oracle is needed here to prove tree
         state_commitment: Option<&mut Self::StorageCommitment>,
-        pubdata_hasher: &mut impl crypto::MiniDigest,
+        pubdata_dst: &mut T,
         result_keeper: &mut impl IOResultKeeper<Self::IOTypes>,
         logger: &mut impl Logger,
     ) -> Result<(), InternalError>;
 
-    #[cfg(feature = "evm_refunds")]
     /// Get current gas refund counter
     fn get_refund_counter(&self) -> u32;
 
     // Add EVM refund to counter
-    #[cfg(feature = "evm_refunds")]
     fn add_evm_refund(&mut self, refund: u32) -> Result<(), SystemError>;
 }

@@ -19,7 +19,7 @@ either = { version = "*", default-features = false }
 storage_models = { path = "../storage_models", default-features = false }
 modexp = { path = "../supporting_crates/modexp" }
 cycle_marker = { path = "../cycle_marker" }
-num-bigint = { version =  "*", optional = true}
+num-bigint = { version =  "0.4", optional = true}
 num-traits = { version =  "*", optional = true}
 
 cfg-if = "1.0.0"
@@ -33,16 +33,14 @@ paste = "1.0.15"
 
 [features]
 testing = ["zk_ee/testing", "evm_interpreter/testing", "serde", "ruint/serde", "rand", "crypto/testing", "num-bigint", "num-traits"]
-evm-compatibility = []
 default = ["testing"]
 cycle_marker = ["cycle_marker/log_to_file"]
-wrap-in-batch = []
 proving = ["crypto/proving"]
-evm_refunds = ["storage_models/evm_refunds"]
-# The finish method will just return inputs, so outputs can be procesed outside bootloader
+# The finish method will just return inputs, so outputs can be processed outside bootloader
 # Used for proving multi block batch within 1 run
 multiblock-batch = []
 state-diffs-pi = []
+aggregation = []
 
 [dev-dependencies]
 hex = {version = "0.4.3"}
@@ -59,3 +57,6 @@ alloy-primitives = { version = "1", features = ["arbitrary"] }
 reqwest = { version = "*", features = ["blocking", "json"] }
 reth-trie-common = { git = "https://github.com/paradigmxyz/reth.git" }
 reth-trie-sparse = { git = "https://github.com/paradigmxyz/reth.git" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }

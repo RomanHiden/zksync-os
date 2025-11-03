@@ -37,17 +37,25 @@ default = ["testing"]
 proving = ["crypto/proving", "basic_system/proving"]
 scalloc = []
 cycle_marker = ["zk_ee/cycle_marker", "evm_interpreter/cycle_marker", "basic_system/cycle_marker", "basic_bootloader/cycle_marker"]
-evm-compatibility = ["basic_bootloader/evm-compatibility", "basic_system/evm-compatibility"]
 unlimited_native = ["basic_bootloader/unlimited_native"]
-wrap-in-batch = ["basic_system/wrap-in-batch"]
+benchmarking = ["cycle_marker"]
 global-alloc = []
-resources_for_tester = ["basic_bootloader/resources_for_tester"]
-disable_system_contracts = ["basic_bootloader/disable_system_contracts"]
-p256_precompile = ["system_hooks/p256_precompile"]
-point_eval_precompile = ["system_hooks/point_eval_precompile"]
 error_origins = ["zk_ee/error_origins"]
-prevrandao = ["zk_ee/prevrandao"]
-evm_refunds = ["zk_ee/evm_refunds", "basic_system/evm_refunds", "basic_bootloader/evm_refunds", "evm_interpreter/evm_refunds"]
-pectra = ["basic_bootloader/pectra"]
 multiblock-batch = ["basic_system/multiblock-batch"]
 state-diffs-pi = ["basic_system/state-diffs-pi"]
+aggregation = ["basic_system/aggregation"]
+
+# A feature for every specific use case
+
+# Features used for production, by both the singleblock_batch and multiblock_batch binaries.
+production = ["basic_bootloader/eip-7702", "system_hooks/p256_precompile"]
+
+# Features used for tests.
+for_tests = ["production", "state-diffs-pi", "cycle_marker", "system_hooks/point_eval_precompile"]
+
+# Features used for eth_runner
+eth_runner = ["basic_bootloader/disable_system_contracts", "zk_ee/prevrandao", "state-diffs-pi", "unlimited_native", "basic_bootloader/burn_base_fee"]
+
+# Features used for evm_tester
+evm_tester = ["basic_bootloader/resources_for_tester", "basic_bootloader/disable_system_contracts", "zk_ee/prevrandao", "state-diffs-pi", "basic_bootloader/eip-7702", "system_hooks/p256_precompile","system_hooks/point_eval_precompile", "basic_bootloader/burn_base_fee", "system_hooks/mock-unsupported-precompiles", "unlimited_native"]
+

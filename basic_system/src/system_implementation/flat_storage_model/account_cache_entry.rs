@@ -2,7 +2,6 @@ use crate::system_implementation::flat_storage_model::{
     BytecodeAndAccountDataPreimagesStorage, PreimageRequest,
 };
 use alloc::alloc::Allocator;
-use crypto::MiniDigest;
 use ruint::aliases::U256;
 use storage_models::common_structs::PreimageCacheModel;
 use zk_ee::common_structs::{PreimageType, ValueDiffCompressionStrategy};
@@ -12,6 +11,7 @@ use zk_ee::oracle::IOOracle;
 use zk_ee::system::errors::{internal::InternalError, runtime::RuntimeError, system::SystemError};
 use zk_ee::system::{IOResultKeeper, Resources};
 use zk_ee::types_config::EthereumIOTypesConfig;
+use zk_ee::utils::write_bytes::WriteBytes;
 use zk_ee::utils::Bytes32;
 
 #[repr(C)]
@@ -115,7 +115,7 @@ pub struct AccountPropertiesMetadata {
     /// Transaction where this account was last accessed.
     /// Considered warm if equal to Some(current_tx)
     pub last_touched_in_tx: Option<u32>,
-    /// Special flag that allows to avoid publishing bytecode for deployed account.
+    /// Special flag that allows avoiding publishing bytecode for deployed account.
     /// In practice, it can be set to `true` only during special protocol upgrade txs.
     /// For protocol upgrades it's ensured by governance that bytecodes are already published separately.
     pub not_publish_bytecode: bool,
@@ -322,11 +322,16 @@ impl AccountProperties {
     ///
     /// The last format(4) created for force deployments during protocol upgrades. We publish only bytecode hash, but it's guaranteed by the governance that bytecode will be published separately.
     ///
-    pub fn diff_compression<const PROOF_ENV: bool, R: Resources, A: Allocator + Clone>(
+    pub fn diff_compression<
+        const PROOF_ENV: bool,
+        R: Resources,
+        A: Allocator + Clone,
+        T: WriteBytes + ?Sized,
+    >(
         initial: &Self,
         r#final: &Self,
         not_publish_bytecode: bool,
-        hasher: &mut impl MiniDigest,
+        dst: &mut T,
         result_keeper: &mut impl IOResultKeeper<EthereumIOTypesConfig>,
         preimages_cache: &mut BytecodeAndAccountDataPreimagesStorage<R, A>,
         oracle: &mut impl IOOracle,
@@ -347,9 +352,9 @@ impl AccountProperties {
                 0b00000100
             };
 
-            hasher.update([metadata_byte]);
+            dst.write(&[metadata_byte]);
             result_keeper.pubdata(&[metadata_byte]);
-            hasher.update(r#final.versioning_data.into_u64().to_be_bytes());
+            dst.write(&r#final.versioning_data.into_u64().to_be_bytes());
             result_keeper.pubdata(&r#final.versioning_data.into_u64().to_be_bytes());
             ValueDiffCompressionStrategy::optimal_compression_u256(
                 initial
@@ -360,23 +365,23 @@ impl AccountProperties {
                     .nonce
                     .try_into()
                     .map_err(|_| internal_error!("u64 into U256"))?,
-                hasher,
+                dst,
                 result_keeper,
             );
             ValueDiffCompressionStrategy::optimal_compression_u256(
                 initial.balance,
                 r#final.balance,
-                hasher,
+                dst,
                 result_keeper,
             );
 
             if not_publish_bytecode {
-                hasher.update(r#final.bytecode_hash.as_u8_ref());
+                dst.write(r#final.bytecode_hash.as_u8_ref());
                 result_keeper.pubdata(r#final.bytecode_hash.as_u8_ref());
             } else {
-                hasher.update(r#final.unpadded_code_len.to_be_bytes());
+                dst.write(&r#final.unpadded_code_len.to_be_bytes());
                 result_keeper.pubdata(&r#final.unpadded_code_len.to_be_bytes());
-                hasher.update(r#final.artifacts_len.to_be_bytes());
+                dst.write(&r#final.artifacts_len.to_be_bytes());
                 result_keeper.pubdata(&r#final.artifacts_len.to_be_bytes());
                 let preimage_type = PreimageRequest {
                     hash: r#final.bytecode_hash,
@@ -400,10 +405,10 @@ impl AccountProperties {
                         }
                         SystemError::LeafDefect(i) => i,
                     })?;
-                hasher.update(bytecode);
+                dst.write(bytecode);
                 result_keeper.pubdata(bytecode);
             }
-            hasher.update(r#final.observable_bytecode_len.to_be_bytes());
+            dst.write(&r#final.observable_bytecode_len.to_be_bytes());
             result_keeper.pubdata(&r#final.observable_bytecode_len.to_be_bytes());
             Ok(())
         } else {
@@ -419,7 +424,7 @@ impl AccountProperties {
             if initial.balance != r#final.balance {
                 metadata_byte |= 2 << 3;
             }
-            hasher.update([metadata_byte]);
+            dst.write(&[metadata_byte]);
             result_keeper.pubdata(&[metadata_byte]);
             if initial.nonce != r#final.nonce {
                 ValueDiffCompressionStrategy::optimal_compression_u256(
@@ -431,7 +436,7 @@ impl AccountProperties {
                         .nonce
                         .try_into()
                         .map_err(|_| internal_error!("u64 into U256"))?,
-                    hasher,
+                    dst,
                     result_keeper,
                 );
             }
@@ -439,7 +444,7 @@ impl AccountProperties {
                 ValueDiffCompressionStrategy::optimal_compression_u256(
                     initial.balance,
                     r#final.balance,
-                    hasher,
+                    dst,
                     result_keeper,
                 );
             }
@@ -513,7 +518,7 @@ mod tests {
         > = BytecodeAndAccountDataPreimagesStorage::new_from_parts(Global);
         let mut test_oracle = TestOracle;
 
-        AccountProperties::diff_compression::<false, _, _>(
+        AccountProperties::diff_compression::<false, _, _, _>(
             &initial,
             &r#final,
             false,
@@ -578,7 +583,7 @@ mod tests {
             .unwrap();
         let mut test_oracle = TestOracle;
 
-        AccountProperties::diff_compression::<false, _, _>(
+        AccountProperties::diff_compression::<false, _, _, _>(
             &initial,
             &r#final,
             false,

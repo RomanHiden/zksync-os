@@ -1,6 +1,5 @@
 //! Storage cache, backed by a history map.
 use crate::system_implementation::flat_storage_model::address_into_special_storage_key;
-use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
 use alloc::fmt::Debug;
 use core::alloc::Allocator;
@@ -8,9 +7,7 @@ use ruint::aliases::B160;
 use storage_models::common_structs::snapshottable_io::SnapshottableIo;
 use storage_models::common_structs::{AccountAggregateDataHash, StorageCacheModel};
 use zk_ee::common_structs::cache_record::{Appearance, CacheRecord};
-#[cfg(feature = "evm_refunds")]
 use zk_ee::common_structs::history_counter::HistoryCounter;
-#[cfg(feature = "evm_refunds")]
 use zk_ee::common_structs::history_counter::HistoryCounterSnapshotId;
 use zk_ee::common_traits::key_like_with_bounds::{KeyLikeWithBounds, TyEq};
 use zk_ee::execution_environment_type::ExecutionEnvironmentType;
@@ -40,7 +37,6 @@ pub struct TransactionId(pub u32);
 
 pub struct StorageSnapshotId {
     pub cache: CacheSnapshotId,
-    #[cfg(feature = "evm_refunds")]
     pub evm_refunds_counter: HistoryCounterSnapshotId,
 }
 
@@ -88,8 +84,8 @@ pub struct StorageElementMetadata {
 }
 
 impl StorageElementMetadata {
-    pub fn considered_warm(&self, current_tx_number: TransactionId) -> bool {
-        self.last_touched_in_tx == Some(current_tx_number)
+    pub fn considered_warm(&self, current_tx_id: TransactionId) -> bool {
+        self.last_touched_in_tx == Some(current_tx_id)
     }
 }
 
@@ -104,9 +100,8 @@ pub struct GenericPubdataAwarePlainStorage<
 > {
     pub(crate) cache: HistoryMap<K, CacheRecord<V, StorageElementMetadata>, A>,
     pub(crate) resources_policy: P,
-    pub(crate) current_tx_number: TransactionId,
-    pub(crate) initial_values: BTreeMap<K, (V, TransactionId), A>, // Used to cache initial values at the beginning of the tx (For EVM gas model)
-    #[cfg(feature = "evm_refunds")]
+    // Note: this doesn't need to be equal to the actual tx number in the block, it just needs to be able to differentiate between transactions.
+    pub(crate) current_tx_id: TransactionId,
     pub(crate) evm_refunds_counter: HistoryCounter<u32, SF, M, A>, // Used to keep track of EVM gas refunds
     alloc: A,
     pub(crate) _marker: core::marker::PhantomData<(R, SF)>,
@@ -131,10 +126,8 @@ impl<
     pub fn new_from_parts(allocator: A, resources_policy: P) -> Self {
         Self {
             cache: HistoryMap::new(allocator.clone()),
-            current_tx_number: TransactionId(0),
+            current_tx_id: TransactionId(0),
             resources_policy,
-            initial_values: BTreeMap::new_in(allocator.clone()),
-            #[cfg(feature = "evm_refunds")]
             evm_refunds_counter: HistoryCounter::new(allocator.clone()),
             alloc: allocator.clone(),
             _marker: core::marker::PhantomData,
@@ -143,21 +136,17 @@ impl<
 
     pub fn begin_new_tx(&mut self) {
         self.cache.commit();
-        #[cfg(feature = "evm_refunds")]
-        {
-            self.evm_refunds_counter = HistoryCounter::new(self.alloc.clone());
-        }
+        self.evm_refunds_counter = HistoryCounter::new(self.alloc.clone());
     }
 
     pub fn finish_tx(&mut self) {
-        self.current_tx_number.0 += 1;
+        self.current_tx_id.0 += 1;
     }
 
     #[track_caller]
     pub fn start_frame(&mut self) -> StorageSnapshotId {
         StorageSnapshotId {
             cache: self.cache.snapshot(),
-            #[cfg(feature = "evm_refunds")]
             evm_refunds_counter: self.evm_refunds_counter.snapshot(),
         }
     }
@@ -169,7 +158,6 @@ impl<
         rollback_handle: Option<&StorageSnapshotId>,
     ) -> Result<(), InternalError> {
         if let Some(x) = rollback_handle {
-            #[cfg(feature = "evm_refunds")]
             self.evm_refunds_counter.rollback(x.evm_refunds_counter);
             self.cache.rollback(x.cache)
         } else {
@@ -181,7 +169,7 @@ impl<
     fn materialize_element<'a>(
         cache: &'a mut HistoryMap<K, CacheRecord<V, StorageElementMetadata>, A>,
         resources_policy: &mut P,
-        current_tx_number: TransactionId,
+        current_tx_id: TransactionId,
         ee_type: ExecutionEnvironmentType,
         resources: &mut R,
         address: &StorageAddress<EthereumIOTypesConfig>,
@@ -230,17 +218,21 @@ impl<
             })
             .and_then(|mut x| {
                 // Warm up element according to EVM rules if needed
-                let is_warm_read = x.current().metadata().considered_warm(current_tx_number);
+                let is_warm_read = x.current().metadata().considered_warm(current_tx_id);
                 if is_warm_read == false {
                     if initialized_element == false {
+                        let is_new_storage_slot = x.current().appearance() == Appearance::Unset;
                         // Element exists in cache, but wasn't touched in current tx yet
-                        resources_policy
-                            .charge_cold_storage_read_extra(ee_type, resources, false)?;
+                        resources_policy.charge_cold_storage_read_extra(
+                            ee_type,
+                            resources,
+                            is_new_storage_slot,
+                        )?;
                     }
 
                     x.update(|cache_record| {
                         cache_record.update_metadata(|m| {
-                            m.last_touched_in_tx = Some(current_tx_number);
+                            m.last_touched_in_tx = Some(current_tx_id);
                             Ok(())
                         })
                     })?;
@@ -263,7 +255,7 @@ where {
         let (addr_data, _) = Self::materialize_element(
             &mut self.cache,
             &mut self.resources_policy,
-            self.current_tx_number,
+            self.current_tx_id,
             ee_type,
             resources,
             address,
@@ -283,12 +275,12 @@ where {
         new_value: &V,
         oracle: &mut impl IOOracle,
         resources: &mut R,
-    ) -> Result<(V, &V), SystemError>
+    ) -> Result<(V, V), SystemError>
 where {
         let (mut addr_data, is_warm_read) = Self::materialize_element(
             &mut self.cache,
             &mut self.resources_policy,
-            self.current_tx_number,
+            self.current_tx_id,
             ee_type,
             resources,
             address,
@@ -300,25 +292,11 @@ where {
         let val_current = addr_data.current().value();
 
         // Try to get initial value at the beginning of the tx.
-        let val_at_tx_start = match self.initial_values.entry(*key) {
-            alloc::collections::btree_map::Entry::Vacant(vacant_entry) => {
-                &vacant_entry
-                    .insert((val_current.clone(), self.current_tx_number))
-                    .0
-            }
-            alloc::collections::btree_map::Entry::Occupied(occupied_entry) => {
-                let (value, tx_number) = occupied_entry.into_mut();
-                if *tx_number != self.current_tx_number {
-                    *value = val_current.clone();
-                    *tx_number = self.current_tx_number;
-                }
-                value
-            }
-        };
+        let val_at_tx_start = addr_data.committed().value().clone();
 
         self.resources_policy.charge_storage_write_extra(
             ee_type,
-            val_at_tx_start,
+            &val_at_tx_start,
             val_current,
             new_value,
             resources,
@@ -462,10 +440,7 @@ impl<
 
         if ee_type == ExecutionEnvironmentType::EVM {
             // EVM specific refunds calculation
-            #[cfg(feature = "evm_refunds")]
             if old_value != *new_value {
-                let val_at_tx_start = *val_at_tx_start;
-
                 let mut gas_refunds = self
                     .0
                     .evm_refunds_counter
@@ -688,12 +663,21 @@ impl<
 
             let current_value = element_history.current().value();
             let initial_value = element_history.initial().value();
+            let at_tx_start_value = element_history.committed().value();
 
-            if initial_value != current_value {
+            // If the current value is resetting to the initial one,
+            // we don't consider this diff in the pubdata charging.
+            // This change will be optimized away, so it's actually reducing
+            // pubdata.
+            if current_value == initial_value {
+                continue;
+            }
+
+            if at_tx_start_value != current_value {
                 // TODO(EVM-1074): use tree index instead of key for repeated writes
                 pubdata_used += 32; // key
                 pubdata_used += ValueDiffCompressionStrategy::optimal_compression_length(
-                    initial_value,
+                    at_tx_start_value,
                     current_value,
                 ) as u32;
             }

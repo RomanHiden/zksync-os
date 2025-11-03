@@ -17,10 +17,10 @@ docker build \
 cid="$(docker create --platform=linux/amd64 zksync-os-bin)"
 
 FILES=(
-    app.bin
+    for_tests.bin
     evm_replay.bin
-    server_app.bin
-    server_app_logging_enabled.bin
+    singleblock_batch.bin
+    singleblock_batch_logging_enabled.bin
     multiblock_batch.bin
     multiblock_batch_logging_enabled.bin
 )

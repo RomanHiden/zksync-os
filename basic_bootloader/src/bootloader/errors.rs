@@ -18,7 +18,7 @@ use zk_ee::system::{
 pub enum InvalidTransaction {
     /// Failed to decode.
     InvalidEncoding,
-    /// Fields set incorrectly in accordance to its type.
+    /// Fields set incorrectly in accordance with its type.
     InvalidStructure,
     /// When using the EIP-1559 fee model introduced in the London upgrade, transactions specify two primary fee fields:
     /// - `gas_max_fee`: The maximum total fee a user is willing to pay, inclusive of both base fee and priority fee.
@@ -227,8 +227,8 @@ macro_rules! require_internal {
 
 zk_ee::define_subsystem!(Bootloader,
 interface BootloaderInterfaceError {
-    CantPayRefundInsufficientBalance,
     CantPayRefundOverflow,
+    CantPayOperatorOverflow,
     MintingBalanceOverflow,
     TopLevelInsufficientBalance,
 },

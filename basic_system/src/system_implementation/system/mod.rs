@@ -1,9 +1,7 @@
 //! Implementation of the system interface.
 use crate::system_implementation::flat_storage_model::FlatTreeWithAccountsUnderHashesStorageModel;
 use crate::system_implementation::flat_storage_model::*;
-use crate::system_implementation::system::public_input::{
-    BlocksOutput, BlocksPublicInput, ChainStateCommitment,
-};
+use crate::system_implementation::system::public_input::ChainStateCommitment;
 use core::alloc::Allocator;
 use errors::system::SystemError;
 use evm_interpreter::gas_constants::COLD_SLOAD_COST;
@@ -24,6 +22,7 @@ use zk_ee::{
     system::{errors::internal::InternalError, logger::Logger, Resources, *},
 };
 
+mod da_commitment_generator;
 mod io_subsystem;
 mod public_input;
 
