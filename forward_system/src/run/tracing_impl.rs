@@ -10,7 +10,7 @@ use zk_ee::system::{
 };
 use zk_ee::types_config::SystemIOTypesConfig;
 use zksync_os_evm_errors::EvmError;
-use zksync_os_interface::tracing::{EvmRequest, EvmResources};
+use zksync_os_interface::tracing::{EvmRequest, EvmResources, EvmStackInterface};
 
 /// Wrapper around interface `EvmTracer` to make it compatible with `zk_ee` tracing API.
 pub(crate) struct TracerWrapped<'a, T: zksync_os_interface::tracing::EvmTracer>(pub &'a mut T);
@@ -23,7 +23,13 @@ struct ExecutionEnvironmentLaunchParamsWrapped<'a, 'b, S: EthereumLikeTypes>(
 /// Wrapper around [`EvmFrameInterface`] to make it compatible with interface tracing API.
 struct EvmFrameInterfaceWrapped<'a, S: EthereumLikeTypes, T: EvmFrameInterface<S>> {
     inner: &'a T,
+    stack_wrapper: EvmStackInterfaceWrapped<'a>,
     _phantom: PhantomData<S>,
+}
+
+/// Wrapper around internal [`EvmStackInterface`] to make it compatible with interface tracing API.
+struct EvmStackInterfaceWrapped<'a> {
+    inner: &'a dyn zk_ee::system::evm::EvmStackInterface,
 }
 
 impl<'a, S: EthereumLikeTypes, T: EvmFrameInterface<S>> From<&'a T>
@@ -32,6 +38,9 @@ impl<'a, S: EthereumLikeTypes, T: EvmFrameInterface<S>> From<&'a T>
     fn from(value: &'a T) -> Self {
         Self {
             inner: value,
+            stack_wrapper: EvmStackInterfaceWrapped {
+                inner: value.stack(),
+            },
             _phantom: PhantomData,
         }
     }
@@ -266,6 +275,10 @@ impl<'a, S: EthereumLikeTypes, T: EvmFrameInterface<S>>
         }
     }
 
+    fn stack(&self) -> &impl EvmStackInterface {
+        &self.stack_wrapper
+    }
+
     fn caller(&self) -> Address {
         self.inner.caller().to_be_bytes().into()
     }
@@ -304,5 +317,19 @@ impl<'a, S: EthereumLikeTypes, T: EvmFrameInterface<S>>
 
     fn is_constructor(&self) -> bool {
         self.inner.is_constructor()
+    }
+}
+
+impl<'a> EvmStackInterface for EvmStackInterfaceWrapped<'a> {
+    fn to_slice(&self) -> &[U256] {
+        self.inner.to_slice()
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn peek_n(&self, index: usize) -> Result<&U256, EvmError> {
+        self.inner.peek_n(index)
     }
 }
