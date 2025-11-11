@@ -32,7 +32,7 @@ struct EvmStackInterfaceWrapped<'a> {
     inner: &'a dyn zk_ee::system::evm::EvmStackInterface,
 }
 
-impl<'a, S: EthereumLikeTypes, T: EvmFrameInterface<S>> From<&'a T>
+impl<'a, S: EthereumLikeTypes + 'a, T: EvmFrameInterface<S>> From<&'a T>
     for EvmFrameInterfaceWrapped<'a, S, T>
 {
     fn from(value: &'a T) -> Self {
