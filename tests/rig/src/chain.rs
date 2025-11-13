@@ -24,6 +24,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
+use zk_ee::common_structs::da_commitment_scheme::DACommitmentScheme;
 use zk_ee::common_structs::{derive_flat_storage_key, ProofData};
 use zk_ee::system::metadata::zk_metadata::{BlockHashes, BlockMetadataFromOracle};
 use zk_ee::system::tracer::NopTracer;
@@ -36,6 +37,7 @@ use zksync_os_interface::types::StorageWrite;
 
 /// Trait for creating oracles with custom configuration
 pub trait TestingOracleFactory<const RANDOMIZED_TREE: bool> {
+    #[allow(clippy::too_many_arguments)]
     fn create_oracle<M: MemorySource + 'static>(
         &self,
         block_metadata: BlockMetadataFromOracle,
@@ -43,6 +45,7 @@ pub trait TestingOracleFactory<const RANDOMIZED_TREE: bool> {
         preimage_source: InMemoryPreimageSource,
         tx_source: TxListSource,
         proof_data: Option<ProofData<FlatStorageCommitment<{ TREE_HEIGHT }>>>,
+        da_commitment_scheme: Option<DACommitmentScheme>,
         add_uart: bool,
     ) -> ZkEENonDeterminismSource<M>;
 }
@@ -60,6 +63,7 @@ impl<const RANDOMIZED_TREE: bool> TestingOracleFactory<RANDOMIZED_TREE>
         preimage_source: InMemoryPreimageSource,
         tx_source: TxListSource,
         proof_data: Option<ProofData<FlatStorageCommitment<{ TREE_HEIGHT }>>>,
+        da_commitment_scheme: Option<DACommitmentScheme>,
         add_uart: bool,
     ) -> ZkEENonDeterminismSource<M> {
         forward_system::run::make_oracle_for_proofs_and_dumps(
@@ -68,6 +72,7 @@ impl<const RANDOMIZED_TREE: bool> TestingOracleFactory<RANDOMIZED_TREE>
             preimage_source,
             tx_source,
             proof_data,
+            da_commitment_scheme,
             add_uart,
         )
     }
@@ -268,6 +273,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
             tx_source.clone(),
             NoopTxCallback,
             None,
+            None,
             &mut nop_tracer,
         )
         .unwrap();
@@ -291,11 +297,13 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         &mut self,
         transactions: Vec<EncodedTx>,
         block_context: Option<BlockContext>,
+        da_commitment_scheme: Option<DACommitmentScheme>,
         run_config: Option<RunConfig>,
     ) -> BlockOutput {
         self.run_block_with_extra_stats(
             transactions,
             block_context,
+            da_commitment_scheme,
             run_config,
             &mut NopTracer::default(),
         )
@@ -313,12 +321,14 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         &mut self,
         transactions: Vec<EncodedTx>,
         block_context: Option<BlockContext>,
+        da_commitment_scheme: Option<DACommitmentScheme>,
         run_config: Option<RunConfig>,
         oracle_factory: &OF,
     ) -> BlockOutput {
         self.run_block_with_extra_stats_with_oracle_factory(
             transactions,
             block_context,
+            da_commitment_scheme,
             run_config,
             &mut NopTracer::default(),
             oracle_factory,
@@ -332,12 +342,14 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         &mut self,
         transactions: Vec<EncodedTx>,
         block_context: Option<BlockContext>,
+        da_commitment_scheme: Option<DACommitmentScheme>,
         run_config: Option<RunConfig>,
     ) -> Result<BlockOutput, BootloaderSubsystemError> {
         let factory = DefaultOracleFactory::<RANDOMIZED_TREE>;
         self.run_inner(
             transactions,
             block_context,
+            da_commitment_scheme,
             run_config.unwrap_or_default(),
             &factory,
             &mut NopTracer::default(),
@@ -350,6 +362,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         &mut self,
         transactions: Vec<EncodedTx>,
         block_context: Option<BlockContext>,
+        da_commitment_scheme: Option<DACommitmentScheme>,
         run_config: Option<RunConfig>,
         tracer: &mut impl Tracer<ForwardRunningSystem>,
     ) -> Result<(BlockOutput, BlockExtraStats, Vec<u32>), BootloaderSubsystemError> {
@@ -357,6 +370,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         self.run_inner(
             transactions,
             block_context,
+            da_commitment_scheme,
             run_config.unwrap_or_default(),
             &factory,
             tracer,
@@ -370,6 +384,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         &mut self,
         transactions: Vec<EncodedTx>,
         block_context: Option<BlockContext>,
+        da_commitment_scheme: Option<DACommitmentScheme>,
         run_config: Option<RunConfig>,
         tracer: &mut impl Tracer<ForwardRunningSystem>,
         oracle_factory: &OF,
@@ -377,6 +392,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         self.run_inner(
             transactions,
             block_context,
+            da_commitment_scheme,
             run_config.unwrap_or_default(),
             oracle_factory,
             tracer,
@@ -388,6 +404,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
         &mut self,
         transactions: Vec<EncodedTx>,
         block_context: Option<BlockContext>,
+        da_commitment_scheme: Option<DACommitmentScheme>,
         run_config: RunConfig,
         oracle_factory: &OF,
         tracer: &mut impl Tracer<ForwardRunningSystem>,
@@ -425,12 +442,15 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
             transactions: transactions.into(),
         };
 
+        let da_commitment_scheme =
+            da_commitment_scheme.unwrap_or(DACommitmentScheme::BlobsAndPubdataKeccak256);
         let oracle = oracle_factory.create_oracle(
             block_metadata,
             self.state_tree.clone(),
             self.preimage_source.clone(),
             tx_source.clone(),
             Some(proof_data),
+            Some(da_commitment_scheme),
             true,
         );
 
@@ -440,6 +460,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
             self.preimage_source.clone(),
             tx_source.clone(),
             Some(proof_data),
+            Some(da_commitment_scheme),
             true,
         );
 
@@ -451,6 +472,7 @@ impl<const RANDOMIZED_TREE: bool> Chain<RANDOMIZED_TREE> {
                 self.preimage_source.clone(),
                 tx_source.clone(),
                 Some(proof_data),
+                Some(da_commitment_scheme),
                 false,
             )
         };
@@ -813,6 +835,7 @@ fn get_zksync_os_sym_path(app_name: &Option<String>) -> PathBuf {
     get_zksync_os_path(app_name, "elf")
 }
 
+// TODO: utils?
 pub fn is_account_properties_address(address: &B160) -> bool {
     address == &ACCOUNT_PROPERTIES_STORAGE_ADDRESS
 }
@@ -844,6 +867,7 @@ fn run_prover(csr_reads: &[u32]) {
     let delegation_precomputations =
         setups::all_delegation_circuits_precomputations::<Global, Global>(&worker);
 
+    // TODO: fix
     let mut non_determinism_source = QuasiUARTSource::default();
     for word in csr_reads {
         non_determinism_source.oracle.push_back(*word);

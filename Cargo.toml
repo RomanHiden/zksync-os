@@ -31,8 +31,11 @@ members = [
     "tests/instances/header",
     "tests/instances/evm",
     "cycle_marker",
-    "tests/binary_checker"
-, "supporting_crates/delegated_u256", "supporting_crates/u256"]
+    "tests/binary_checker",
+    "supporting_crates/delegated_u256",
+    "supporting_crates/u256",
+    "scripts"
+]
 
 exclude = [
     "zksync_os",
