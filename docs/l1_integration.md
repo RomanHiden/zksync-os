@@ -138,12 +138,11 @@ Pubdata includes data needed to restore the full chain state(everything under co
 Now it includes(for each block):
 - pubdata encoding version (currently 0x01)
 - block hash
+- block timestamp (8 bytes, BE)
 - state diffs, for the current storage model it's:
   - compressed diffs for contracts storage slots changed during block execution
   - accounts changes(nonce, balance, bytecode)
 - l2 -> l1 logs
 - l2 -> l1 messages
 
-Block number can be derived from pubdata implicitly, but you may note that it doesn't include block timestamp.
-Currently, we are sending the last block timestamp to the settlement layer in calldata, but this part is not finalized and we may change it in the future.
-Especially it's important for chains that settle on chains other than Ethereum.
+Block number can be derived from pubdata implicitly.
