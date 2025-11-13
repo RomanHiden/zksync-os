@@ -245,7 +245,7 @@ fn run_base_system_common(use_712: bool) {
             U256::from(1_000_000_000_000_000_u64),
         );
 
-    let output = chain.run_block(transactions, None, run_config());
+    let output = chain.run_block(transactions, None, None, run_config());
 
     // Assert all txs succeeded
     assert!(output.tx_results.iter().cloned().enumerate().all(|(i, r)| {
@@ -338,7 +338,7 @@ fn test_withdrawal() {
         U256::from(1_000_000_000_000_000_u64),
     );
 
-    let output = chain.run_block(transactions, None, run_config());
+    let output = chain.run_block(transactions, None, None, run_config());
 
     // Assert all txs succeeded
     assert!(output.tx_results.iter().cloned().enumerate().all(|(i, r)| {
@@ -413,7 +413,7 @@ fn test_tx_with_access_list() {
         U256::from(1_000_000_000_000_000_u64),
     );
 
-    let output = chain.run_block(transactions, None, run_config());
+    let output = chain.run_block(transactions, None, None, run_config());
 
     // Assert all txs succeeded
     let result0 = output.tx_results.first().unwrap().clone();
@@ -483,7 +483,7 @@ fn test_tx_with_authorization_list() {
         check_storage_diff_hashes: true,
         ..Default::default()
     };
-    let output = chain.run_block(transactions, None, Some(run_config));
+    let output = chain.run_block(transactions, None, None, Some(run_config));
 
     // Assert all txs succeeded
     let result0 = output.tx_results.first().unwrap().clone();
@@ -558,7 +558,7 @@ fn test_cold_in_new_tx() {
         U256::from(1_000_000_000_000_000_u64),
     );
 
-    let output = chain.run_block(transactions, None, run_config());
+    let output = chain.run_block(transactions, None, None, run_config());
 
     // Assert all txs succeeded
     let result0 = output.tx_results.first().unwrap().clone();
@@ -629,7 +629,7 @@ fn test_independent_txs_have_same_pubdata() {
             U256::from(1_000_000_000_000_000_u64),
         );
 
-    let output = chain.run_block(transactions, None, run_config());
+    let output = chain.run_block(transactions, None, None, run_config());
 
     // Assert all txs succeeded and compare pubdata len
     assert!(output.tx_results.iter().cloned().enumerate().all(|(i, r)| {
@@ -696,7 +696,7 @@ fn test_invalid_tx_does_not_bump_tx_counter() {
         B160::from_be_bytes(from.0),
         U256::from(1_000_000_000_000_000_u64),
     );
-    let output = chain.run_block(transactions, None, None);
+    let output = chain.run_block(transactions, None, None, None);
 
     // Assert tx succeeded/failed
     let result0 = output.tx_results.first().unwrap().clone();
@@ -748,7 +748,7 @@ fn test_invalid_tx_does_not_affect_native() {
         B160::from_be_bytes(from.0),
         U256::from(1_000_000_000_000_000_u64),
     );
-    let output = chain.run_block(transactions, None, None);
+    let output = chain.run_block(transactions, None, None, None);
 
     // Assert tx succeeded
     let result = output.tx_results.first().unwrap().clone();
@@ -779,7 +779,7 @@ fn test_invalid_tx_does_not_affect_native() {
         B160::from_be_bytes(from.0),
         U256::from(1_000_000_000_000_000_u64),
     );
-    let output = chain.run_block(transactions, None, None);
+    let output = chain.run_block(transactions, None, None, None);
 
     // Assert tx succeeded
     let result0 = output.tx_results.first().unwrap().clone();
@@ -858,7 +858,7 @@ fn test_regression_returndata_empty_3541() {
         U256::from(1_000_000_000_000_000_u64),
     );
 
-    let output = chain.run_block(transactions, None, run_config());
+    let output = chain.run_block(transactions, None, None, run_config());
 
     // Assert all txs succeeded
     let result0 = output.tx_results.first().unwrap().clone();
@@ -924,7 +924,12 @@ fn test_balance_overflow_protection() {
         rig::utils::sign_and_encode_alloy_tx(tx, &wallet)
     };
 
-    let output = chain.run_block(vec![overflow_fee_tx, overflow_total_tx], None, run_config());
+    let output = chain.run_block(
+        vec![overflow_fee_tx, overflow_total_tx],
+        None,
+        None,
+        run_config(),
+    );
 
     assert!(
         output.tx_results.get(0).unwrap().is_err(),
@@ -967,7 +972,7 @@ fn test_upgrade_tx_revert_internal_error() {
     let transactions = vec![upgrade_tx];
 
     // Use run_block_no_panic to catch the error instead of panicking
-    let result = chain.run_block_no_panic(transactions, None, None);
+    let result = chain.run_block_no_panic(transactions, None, None, None);
 
     // The upgrade transaction should fail with an internal error (not validation error)
     assert!(result.is_err());
@@ -1011,7 +1016,7 @@ fn test_upgrade_tx_succeeds() {
     let transactions = vec![upgrade_tx];
 
     // Use run_block_no_panic to catch the error instead of panicking
-    let result = chain.run_block_no_panic(transactions, None, None);
+    let result = chain.run_block_no_panic(transactions, None, None, None);
     assert!(result.is_ok());
 
     assert!(result.unwrap().tx_results[0].as_ref().unwrap().is_success());
@@ -1048,7 +1053,7 @@ fn test_invalid_transaction_type_failure() {
         );
 
         let transactions = vec![invalid_tx];
-        let result = chain.run_block(transactions, None, run_config());
+        let result = chain.run_block(transactions, None, None, run_config());
         assert!(
             result.tx_results[0].is_err(),
             "Transaction with invalid type should fail"
@@ -1116,7 +1121,7 @@ fn test_modexp_intermediate_zero_block() {
         U256::from(10u64.pow(18)),
     );
 
-    let result = chain.run_block(transactions, None, None);
+    let result = chain.run_block(transactions, None, None, None);
 
     // The transaction should succeed
     assert!(
@@ -1191,7 +1196,7 @@ fn test_point_eval_call() {
         U256::from(10u64.pow(18)),
     );
 
-    let result = chain.run_block(transactions, None, None);
+    let result = chain.run_block(transactions, None, None, None);
 
     // The transaction should succeed
     assert!(result.tx_results[0].is_ok(), "Transaction should succeed");
@@ -1250,7 +1255,7 @@ fn test_selfdestruct_to_precompile_gas() {
         rig::utils::sign_and_encode_alloy_tx(tx, &wallet)
     };
 
-    let result = chain.run_block(vec![encoded_tx], None, None);
+    let result = chain.run_block(vec![encoded_tx], None, None, None);
     let res0 = result.tx_results.first().expect("Must have a tx result");
     assert!(res0.as_ref().is_ok(), "Tx should succeed");
     let gas_used = res0.clone().unwrap().gas_used;
@@ -1304,7 +1309,7 @@ fn test_reject_caller_with_code_behavior() {
     );
 
     // But in normal mode it should fail
-    let result_normal = chain.run_block(vec![from_contract_tx], None, run_config());
+    let result_normal = chain.run_block(vec![from_contract_tx], None, None, run_config());
     assert!(matches!(
         result_normal.tx_results[0],
         Err(InvalidTransaction::RejectCallerWithCode)
@@ -1352,7 +1357,7 @@ fn test_expensive_pubdata() {
         ..Default::default()
     };
     // Check tx succeeds
-    let result = chain.run_block(vec![tx], Some(block_context), run_config());
+    let result = chain.run_block(vec![tx], Some(block_context), None, run_config());
     let res0 = result.tx_results.first().expect("Must have a tx result");
     assert!(res0.as_ref().is_ok(), "Tx should succeed");
 }
