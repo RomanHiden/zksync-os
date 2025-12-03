@@ -23,6 +23,6 @@ macro_rules! native_with_delegations {
 /// is not upper-bounding for some corner cases, we set this limit
 /// conservatively to 2^35.
 ///
-pub const MAX_NATIVE_COMPUTATIONAL: u64 = 1 << 35;
+pub const MAX_NATIVE_COMPUTATIONAL: u64 = 1 << 32;
 
 pub const EIP7702_DELEGATION_MARKER: [u8; 3] = [0xef, 0x01, 0x00];
