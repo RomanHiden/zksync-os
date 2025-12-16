@@ -23,6 +23,7 @@ use zk_ee::memory::ArrayBuilder;
 use zk_ee::system::errors::interface::InterfaceError;
 use zk_ee::system::errors::subsystem::SubsystemError;
 use zk_ee::system::tracer::Tracer;
+use zk_ee::system::validator::TxValidator;
 use zk_ee::system::{
     errors::{runtime::RuntimeError, system::SystemError},
     logger::Logger,
@@ -48,6 +49,7 @@ where
         caller_nonce: u64,
         resources: &mut S::Resources,
         _tracer: &mut impl Tracer<S>,
+        _validator: &mut impl TxValidator<S>,
     ) -> Result<(), TxError> {
         // safe to panic, validated by the structure
         let from = transaction.from();
@@ -182,6 +184,7 @@ where
         current_tx_nonce: u64,
         resources: &mut S::Resources,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<ExecutionResult<'a>, BootloaderSubsystemError> {
         // panic is not reachable, validated by the structure
         let from = transaction.from();
@@ -212,6 +215,7 @@ where
                 nominal_token_value,
                 current_tx_nonce,
                 tracer,
+                validator,
             )?,
             None => {
                 let final_state = BasicBootloader::<S, Self>::run_single_interaction(
@@ -225,6 +229,7 @@ where
                     &nominal_token_value,
                     true,
                     tracer,
+                    validator,
                 )?;
 
                 let CompletedExecution {
@@ -324,6 +329,7 @@ where
         caller_ee_type: ExecutionEnvironmentType,
         resources: &mut S::Resources,
         _tracer: &mut impl Tracer<S>,
+        _validator: &mut impl TxValidator<S>,
     ) -> Result<(), TxError> {
         let amount = gas_price
             .checked_mul(U256::from(transaction.gas_limit()))
@@ -435,6 +441,7 @@ fn process_deployment<'a, S: EthereumLikeTypes>(
     nominal_token_value: &U256,
     existing_nonce: u64,
     tracer: &mut impl Tracer<S>,
+    validator: &mut impl TxValidator<S>,
 ) -> Result<TxExecutionResult<'a, S>, BootloaderSubsystemError>
 where
     S::IO: IOSubsystemExt,
@@ -487,6 +494,7 @@ where
         to_ee_type,
         deployment_request,
         tracer,
+        validator,
     )?;
 
     let CompletedExecution {

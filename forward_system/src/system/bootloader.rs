@@ -5,6 +5,7 @@ use basic_bootloader::bootloader::result_keeper::ResultKeeperExt;
 use oracle_provider::DummyMemorySource;
 use oracle_provider::ZkEENonDeterminismSource;
 use zk_ee::system::tracer::Tracer;
+use zk_ee::system::validator::TxValidator;
 
 ///
 /// Run bootloader with forward system with a given `oracle`.
@@ -14,8 +15,11 @@ pub fn run_forward<Config: BasicBootloaderExecutionConfig>(
     oracle: ZkEENonDeterminismSource<DummyMemorySource>,
     result_keeper: &mut impl ResultKeeperExt,
     tracer: &mut impl Tracer<ForwardRunningSystem>,
+    validator: &mut impl TxValidator<ForwardRunningSystem>,
 ) {
-    if let Err(err) = ForwardBootloader::run_prepared::<Config>(oracle, result_keeper, tracer) {
+    if let Err(err) =
+        ForwardBootloader::run_prepared::<Config>(oracle, result_keeper, tracer, validator)
+    {
         panic!("Forward run failed with: {err}")
     };
 }
@@ -24,6 +28,7 @@ pub fn run_forward_no_panic<Config: BasicBootloaderExecutionConfig>(
     oracle: ZkEENonDeterminismSource<DummyMemorySource>,
     result_keeper: &mut impl ResultKeeperExt,
     tracer: &mut impl Tracer<ForwardRunningSystem>,
+    validator: &mut impl TxValidator<ForwardRunningSystem>,
 ) -> Result<(), BootloaderSubsystemError> {
-    ForwardBootloader::run_prepared::<Config>(oracle, result_keeper, tracer).map(|_| ())
+    ForwardBootloader::run_prepared::<Config>(oracle, result_keeper, tracer, validator).map(|_| ())
 }

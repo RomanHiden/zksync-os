@@ -11,6 +11,7 @@ use ruint::aliases::{B160, U256};
 use system_hooks::HooksStorage;
 use zk_ee::execution_environment_type::ExecutionEnvironmentType;
 use zk_ee::system::tracer::Tracer;
+use zk_ee::system::validator::TxValidator;
 use zk_ee::system::EthereumLikeTypes;
 use zk_ee::system::System;
 use zk_ee::system::*;
@@ -96,6 +97,7 @@ where
         caller_nonce: u64,
         resources: &mut S::Resources,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<(), TxError>;
 
     /// Execute transaction
@@ -109,6 +111,7 @@ where
         current_tx_nonce: u64,
         resources: &mut S::Resources,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<ExecutionResult<'a>, BootloaderSubsystemError>;
 
     ///
@@ -149,5 +152,6 @@ where
         caller_ee_type: ExecutionEnvironmentType,
         resources: &mut S::Resources,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<(), TxError>;
 }

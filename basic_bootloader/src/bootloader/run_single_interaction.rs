@@ -72,6 +72,7 @@ where
         nominal_token_value: &U256,
         should_make_frame: bool,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<CompletedExecution<'a, S>, BootloaderSubsystemError>
     where
         S::IO: IOSubsystemExt,
@@ -140,6 +141,7 @@ where
             ee_type,
             initial_request,
             tracer,
+            validator,
         )?;
 
         let CompletedExecution {

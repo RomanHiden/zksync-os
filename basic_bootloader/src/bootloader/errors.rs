@@ -103,6 +103,7 @@ pub enum InvalidTransaction {
     AuthListIsEmpty,
     /// 7702 has a null destination address
     EIP7702HasNullDestination,
+    FilteredByValidator,
 }
 
 ///
