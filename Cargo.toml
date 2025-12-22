@@ -54,8 +54,8 @@ keywords = ["blockchain", "zksync", "zk", "risc-v"]
 categories = ["cryptography"]
 
 [workspace.dependencies]
-#zksync_os_evm_errors = { version = "0.0.11", default-features =  false }
-#zksync_os_interface = { version = "0.0.11"}
+#zksync_os_evm_errors = { version = "0.0.13", default-features =  false }
+#zksync_os_interface = { version = "0.0.13"}
 
 zksync_os_interface = { git = "https://github.com/RomanHiden/zksync-os-interface", branch = "main" }
 zksync_os_evm_errors = { git = "https://github.com/RomanHiden/zksync-os-interface", branch = "main", default-features = false }
