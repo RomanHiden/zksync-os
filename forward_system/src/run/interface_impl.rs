@@ -38,7 +38,7 @@ impl RunBlock for RunBlockForward {
         tx_source: TrSrc,
         tx_result_callback: TrCallback,
         tracer: &mut Tracer,
-        validator: &mut Validator,
+        _validator: &mut Validator,
     ) -> Result<BlockOutput, Self::Error> {
         let evm_tracer = tracer.as_evm().expect("only EVM tracers are supported");
         let evm_tx_validator = validator
@@ -73,7 +73,7 @@ impl SimulateTx for RunBlockForward {
         storage: Storage,
         preimage_source: PreimgSrc,
         tracer: &mut Tracer,
-        validator: &mut Validator,
+        _validator: &mut Validator,
     ) -> Result<TxResult, Self::Error> {
         let evm_tracer = tracer.as_evm().expect("only EVM tracers are supported");
         let evm_tx_validator = validator
