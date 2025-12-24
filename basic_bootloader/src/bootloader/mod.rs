@@ -195,6 +195,14 @@ where
                     cycle_marker::end!("process_transaction");
 
                     tracer.finish_tx();
+                    let post_validation = validator.finish_tx();
+
+                    let tx_result = match tx_result {
+                        Ok(ok) => post_validation
+                            .map(|_| ok)
+                            .map_err(|e| TxError::Validation(e.into())),
+                        Err(err) => Err(err),
+                    };
 
                     match tx_result {
                         Err(TxError::Internal(err)) => {
