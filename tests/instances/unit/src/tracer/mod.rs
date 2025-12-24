@@ -10,6 +10,7 @@ use rig::alloy::primitives::{Address, TxKind, U256};
 use rig::forward_system::system::tracers::call_tracer::CallTracer;
 use rig::ruint::aliases::B160;
 use rig::Chain;
+use rig::zk_ee::system::validator::NopTxValidator;
 
 pub(crate) fn run_chain_with_tracer(
     to: Address,
@@ -43,7 +44,7 @@ pub(crate) fn run_chain_with_tracer(
         rig::utils::sign_and_encode_alloy_tx(tx, &wallet)
     };
 
-    let result = chain.run_block_with_extra_stats(vec![encoded_tx], None, None, None, tracer);
+    let result = chain.run_block_with_extra_stats(vec![encoded_tx], None, None, None, tracer, &mut NopTxValidator::default());
 
     assert!(result.is_ok(), "Block execution should succeed");
     let (block_output, _, _) = result.unwrap();

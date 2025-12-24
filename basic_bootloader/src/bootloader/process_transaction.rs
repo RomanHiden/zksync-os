@@ -67,6 +67,7 @@ where
         memories: RunnerMemoryBuffers<'a>,
         is_first_tx: bool,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<TxProcessingResult<'a>, TxError> {
         let transaction = Transaction::try_from_buffer(initial_calldata_buffer, system)?;
 
@@ -83,6 +84,7 @@ where
                             zk_tx,
                             false,
                             tracer,
+                            validator,
                         )
                     }
                 } else if transaction.is_l1_l2() {
@@ -93,6 +95,7 @@ where
                         zk_tx,
                         true,
                         tracer,
+                        validator,
                     )
                 } else {
                     Self::process_l2_transaction::<Config>(
@@ -101,6 +104,7 @@ where
                         memories,
                         transaction,
                         tracer,
+                        validator,
                     )
                 }
             }
@@ -110,6 +114,7 @@ where
                 memories,
                 transaction,
                 tracer,
+                validator,
             ),
         }
     }
@@ -121,6 +126,7 @@ where
         transaction: &AbiEncodedTransaction<S::Allocator>,
         is_priority_op: bool,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<TxProcessingResult<'a>, TxError> {
         // The work done by the bootloader (outside of EE or EOA specific
         // computation) is charged as part of the intrinsic gas cost.
@@ -240,6 +246,7 @@ where
                 &mut resources,
                 withheld_resources,
                 tracer,
+                validator,
             ) {
                 Ok((r, pubdata_used, to_charge_for_pubdata, resources_before_refund)) => {
                     let pubdata_info = match r {
@@ -417,6 +424,7 @@ where
         resources: &mut S::Resources,
         withheld_resources: S::Resources,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<(ExecutionResult<'a>, u64, S::Resources, S::Resources), BootloaderSubsystemError>
     {
         let _ = system
@@ -473,6 +481,7 @@ where
             &value,
             false,
             tracer,
+            validator,
         )?;
         let reverted = result.failed();
         let return_values = result.return_values();
@@ -530,6 +539,7 @@ where
         mut memories: RunnerMemoryBuffers<'a>,
         mut transaction: Transaction<S::Allocator>,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<TxProcessingResult<'a>, TxError> {
         let from = *transaction.from();
         let gas_limit = transaction.gas_limit();
@@ -648,6 +658,7 @@ where
             &mut resources,
             &mut withheld_resources,
             tracer,
+            validator,
         )?;
 
         // Parse, validate and apply authorization list, following EIP-7702
@@ -681,6 +692,7 @@ where
             caller_nonce,
             &mut resources,
             tracer,
+            validator,
             withheld_resources.clone(),
         ) {
             Ok((r, pubdata_used, to_charge_for_pubdata)) => {
@@ -796,6 +808,7 @@ where
         resources: &mut S::Resources,
         withheld_resources: &mut S::Resources,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<ValidationResult, TxError> {
         let _ = system
             .get_logger()
@@ -823,6 +836,7 @@ where
             caller_nonce,
             resources,
             tracer,
+            validator,
         )?;
         let from = transaction.from();
         // Check nonce has been marked
@@ -852,6 +866,7 @@ where
             caller_ee_type,
             resources,
             tracer,
+            validator,
         )?;
 
         // Charge for validation pubdata
@@ -922,6 +937,7 @@ where
         current_tx_nonce: u64,
         resources: &mut S::Resources,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
         withheld_resources: S::Resources,
     ) -> Result<(ExecutionResult<'a>, u64, S::Resources), BootloaderSubsystemError> {
         let _ = system
@@ -941,6 +957,7 @@ where
             current_tx_nonce,
             resources,
             tracer,
+            validator,
         )?;
 
         let _ = system

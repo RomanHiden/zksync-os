@@ -4,6 +4,7 @@ use ruint::aliases::*;
 use zk_ee::common_structs::MAX_NUMBER_OF_LOGS;
 use zk_ee::execution_environment_type::ExecutionEnvironmentType;
 use zk_ee::system::tracer::Tracer;
+use zk_ee::system::validator::TxValidator;
 use zk_ee::system::{EthereumLikeTypes, System, SystemTypes};
 
 pub mod run_single_interaction;
@@ -77,6 +78,7 @@ where
         mut oracle: <S::IO as IOSubsystemExt>::IOOracle,
         result_keeper: &mut impl ResultKeeperExt,
         tracer: &mut impl Tracer<S>,
+        validator: &mut impl TxValidator<S>,
     ) -> Result<<S::IO as IOSubsystemExt>::FinalData, BootloaderSubsystemError>
     where
         S::IO: IOSubsystemExt,
@@ -187,11 +189,20 @@ where
                         memories.reborrow(),
                         first_tx,
                         tracer,
+                        validator,
                     );
 
                     cycle_marker::end!("process_transaction");
 
                     tracer.finish_tx();
+                    let post_validation = validator.finish_tx();
+
+                    let tx_result = match tx_result {
+                        Ok(ok) => post_validation
+                            .map(|_| ok)
+                            .map_err(|e| TxError::Validation(e.into())),
+                        Err(err) => Err(err),
+                    };
 
                     match tx_result {
                         Err(TxError::Internal(err)) => {

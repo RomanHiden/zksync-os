@@ -176,13 +176,19 @@ pub fn run_proving_inner<
 >(
     oracle: O,
 ) -> [u32; 8] {
+    use zk_ee::system::validator::NopTxValidator;
+
     let _ = L::default().write_fmt(format_args!("IO implementer init is complete"));
 
     // Load all transactions from oracle and apply them.
-    let (mut oracle, public_input) = ProvingBootloader::<O, L>::run_prepared::<
-        BasicBootloaderProvingExecutionConfig,
-    >(oracle, &mut NopResultKeeper, &mut NopTracer::default())
-    .expect("Tried to prove a failing batch");
+    let (mut oracle, public_input) =
+        ProvingBootloader::<O, L>::run_prepared::<BasicBootloaderProvingExecutionConfig>(
+            oracle,
+            &mut NopResultKeeper,
+            &mut NopTracer::default(),
+            &mut NopTxValidator::default(),
+        )
+        .expect("Tried to prove a failing batch");
 
     // disconnect oracle before returning, if some other post-logic is needed that doesn't use Oracle trait
     // TODO: check this is the intended behaviour (ignoring the result)

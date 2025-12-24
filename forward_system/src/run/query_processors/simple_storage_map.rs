@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use super::*;
 use ruint::aliases::B160;
+use zk_ee::utils::Bytes32;
 use zk_ee::{
     oracle::query_ids::INITIAL_STORAGE_SLOT_VALUE_QUERY_ID,
     oracle::usize_serialization::dyn_usize_iterator::DynUsizeIterator,
     storage_types::{InitialStorageSlotData, StorageAddress},
 };
-
 /// This processor provides a simple HashMap-based implementation for storage
 /// queries. It's primarily used for testing or scenarios where the entire
 /// storage state can be held in memory.
