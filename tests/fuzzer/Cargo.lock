@@ -1843,6 +1843,7 @@ dependencies = [
  "paste",
  "ruint",
  "serde",
+ "serde-big-array",
  "strum_macros 0.27.2",
  "system_hooks",
  "zk_ee",
@@ -1853,6 +1854,7 @@ name = "basic_system"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
+ "cc-traits",
  "cfg-if",
  "const-hex",
  "const_for",
@@ -1869,6 +1871,8 @@ dependencies = [
  "serde",
  "storage_models",
  "strum_macros 0.27.2",
+ "system_hooks",
+ "zerocopy",
  "zk_ee",
 ]
 
@@ -1882,6 +1886,7 @@ dependencies = [
  "alloy-rpc-types-debug",
  "arbitrary",
  "arrayvec",
+ "cc-traits",
  "cfg-if",
  "const-hex",
  "const_for",
@@ -1904,6 +1909,7 @@ dependencies = [
  "serde_json",
  "storage_models_forward",
  "strum_macros 0.27.2",
+ "system_hooks_forward",
  "zk_ee_forward",
 ]
 
@@ -1917,6 +1923,7 @@ dependencies = [
  "alloy-rpc-types-debug",
  "arbitrary",
  "arrayvec",
+ "cc-traits",
  "cfg-if",
  "const-hex",
  "const_for",
@@ -1939,6 +1946,7 @@ dependencies = [
  "serde_json",
  "storage_models_proving",
  "strum_macros 0.27.2",
+ "system_hooks_proving",
  "zk_ee_proving",
 ]
 
@@ -2207,6 +2215,7 @@ name = "callable_oracles"
 version = "0.1.0"
 dependencies = [
  "alloy-consensus",
+ "basic_bootloader",
  "basic_system",
  "c-kzg",
  "crypto",
@@ -2261,6 +2270,10 @@ dependencies = [
  "libc",
  "shlex",
 ]
+
+[[package]]
+name = "cc-traits"
+version = "0.1.0"
 
 [[package]]
 name = "cfg-if"
@@ -3640,7 +3653,7 @@ dependencies = [
  "ruint",
  "strum_macros 0.27.2",
  "zk_ee",
- "zksync_os_evm_errors 0.0.10",
+ "zksync_os_evm_errors 0.0.13",
 ]
 
 [[package]]
@@ -3871,6 +3884,7 @@ dependencies = [
  "basic_system",
  "bincode",
  "callable_oracles",
+ "crypto",
  "evm_interpreter",
  "hex",
  "oracle_provider",
@@ -3880,7 +3894,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "system_hooks",
  "zk_ee",
- "zksync_os_evm_errors 0.0.10",
+ "zksync_os_evm_errors 0.0.13",
  "zksync_os_interface",
  "zksync_os_runner",
 ]
@@ -7196,6 +7210,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "alloy-rlp",
+ "alloy-rpc-types-debug",
  "alloy-sol-types",
  "basic_bootloader",
  "basic_system",
@@ -7209,6 +7224,7 @@ dependencies = [
  "futures",
  "hex",
  "log",
+ "once_cell",
  "oracle_provider",
  "risc_v_simulator 0.1.0 (git+https://github.com/matter-labs/zksync-airbender?tag=v0.4.3)",
  "ruint",
@@ -7848,6 +7864,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8409,6 +8434,32 @@ dependencies = [
  "ruint",
  "strum_macros 0.27.2",
  "zk_ee",
+]
+
+[[package]]
+name = "system_hooks_forward"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "cycle_marker",
+ "evm_interpreter_forward",
+ "paste",
+ "ruint",
+ "strum_macros 0.27.2",
+ "zk_ee_forward",
+]
+
+[[package]]
+name = "system_hooks_proving"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "cycle_marker",
+ "evm_interpreter_proving",
+ "paste",
+ "ruint",
+ "strum_macros 0.27.2",
+ "zk_ee_proving",
 ]
 
 [[package]]
@@ -10019,7 +10070,7 @@ dependencies = [
  "ruint",
  "serde",
  "strum_macros 0.27.2",
- "zksync_os_evm_errors 0.0.10",
+ "zksync_os_evm_errors 0.0.13",
 ]
 
 [[package]]
@@ -10080,6 +10131,8 @@ name = "zksync_os_api"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-sol-types",
+ "basic_bootloader",
  "basic_system",
  "callable_oracles",
  "crypto",
@@ -10101,20 +10154,20 @@ checksum = "95ddc4ac82441385017e569ee1b060502a2af4d78c4fb7b24bcee70b0b96e6a3"
 
 [[package]]
 name = "zksync_os_evm_errors"
-version = "0.0.10"
+version = "0.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b3ad55a8aa3498e304565de55b61dc930bac227c8c5e81284b623c69f2143d2"
+checksum = "8fea4915ff8302cbd66403de07518fe4025fbcacd3d3d1760cc03029e710586a"
 
 [[package]]
 name = "zksync_os_interface"
-version = "0.0.10"
+version = "0.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3476c481db1ea2db28ed8cbdfef391576288cb9e13241f7944274b72cf1e251e"
+checksum = "46c449cd98de3bd8891e092f336b61b0b35fd84a8a5eb95ce0be1fb5a006fd27"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
  "serde",
- "zksync_os_evm_errors 0.0.10",
+ "zksync_os_evm_errors 0.0.13",
 ]
 
 [[package]]
